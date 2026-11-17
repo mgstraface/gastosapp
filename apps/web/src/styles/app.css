@@ -863,3 +863,33 @@ input[type='date'] {
   display: inline;
   padding: 0;
 }
+
+/* ---------- iOS 26 instalada en inicio ----------
+   iOS calcula la ventana más corta que la pantalla y las barras fijas quedan flotando
+   con una franja vacía abajo. 1) Se estira la raíz para que la ventana llegue al borde.
+   2) Respaldo: la barra se prolonga hacia abajo, así si queda franja no se nota. */
+@media (display-mode: standalone) {
+  html {
+    min-height: calc(100% + env(safe-area-inset-top, 0px));
+  }
+}
+.tabbar::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  height: 120px;
+  background: inherit;
+  backdrop-filter: inherit;
+  -webkit-backdrop-filter: inherit;
+}
+.sheet::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  height: 120px;
+  background: var(--paper);
+}
