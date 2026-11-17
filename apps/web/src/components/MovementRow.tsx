@@ -9,6 +9,27 @@ export function MovementRow({ line, accountView }: { line: MonthLine; /** Si se 
   const m = line.movement;
   const acc = accountOf(settings, m.accountKey);
 
+  if (m.kind === 'transferencia' && m.personKey) {
+    const person = settings.people.find((p) => p.key === m.personKey);
+    const name = person?.name ?? 'alguien';
+    const paid = !!m.accountKey; // le pagué yo
+    const mine = accountOf(settings, paid ? m.accountKey : m.toAccountKey);
+    return (
+      <button type="button" className="mov-row" onClick={() => open({ mode: 'edit', movement: m })}>
+        <span className="mov-icon" aria-hidden="true">
+          🤝
+        </span>
+        <span className="mov-text">
+          <strong>{m.description || (paid ? `Le pagué a ${name}` : `${name} me pagó`)}</strong>
+          <small>
+            {person?.emoji} {name} · {mine ? `${mine.emoji} ${mine.name}` : 'Sin cuenta'}
+          </small>
+        </span>
+        <span className={`mov-amount${paid ? '' : ' is-income'}`}>{formatMoney(paid ? -m.amount : m.amount, m.currency, { sign: !paid })}</span>
+      </button>
+    );
+  }
+
   if (m.kind === 'transferencia') {
     const to = accountOf(settings, m.toAccountKey);
     const incoming = accountView !== undefined && accountView === m.toAccountKey;
@@ -35,9 +56,11 @@ export function MovementRow({ line, accountView }: { line: MonthLine; /** Si se 
 
   const cat = categoryOf(settings, m.categoryKey);
   const isIncome = m.kind === 'ingreso';
+  const person = m.split ? settings.people.find((p) => p.key === m.split!.personKey) : null;
   const detail = [
     m.installments > 1 ? `Cuota ${line.installment}/${m.installments}` : null,
-    acc ? `${acc.emoji} ${acc.name}` : 'Sin cuenta',
+    m.split ? `👥 con ${person?.name ?? 'alguien'}` : null,
+    m.split?.paidBy === 'them' ? `pagó ${person?.name ?? 'la otra persona'}` : acc ? `${acc.emoji} ${acc.name}` : 'Sin cuenta',
     m.kind === 'gasto' && m.method === 'credito' ? METHOD_LABELS.credito : null,
   ]
     .filter(Boolean)
@@ -57,7 +80,7 @@ export function MovementRow({ line, accountView }: { line: MonthLine; /** Si se 
       </span>
       <span className={`mov-amount${isIncome ? ' is-income' : ''}`}>
         {formatMoney(isIncome ? line.amount : -line.amount, m.currency, { sign: isIncome })}
-        {m.installments > 1 && <small>de {formatMoney(m.amount, m.currency)}</small>}
+        {m.split ? <small>tu parte de {formatMoney(m.amount, m.currency)}</small> : m.installments > 1 && <small>de {formatMoney(m.amount, m.currency)}</small>}
       </span>
     </button>
   );

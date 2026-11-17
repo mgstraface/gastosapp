@@ -19,7 +19,7 @@ const csvCell = (v: string | number) => {
 
 /** CSV con punto y coma y coma decimal: abre directo en Excel/Sheets configurados en español. */
 export function movementsCsv(movements: Movement[], settings: Settings): string {
-  const head = ['Fecha', 'Tipo', 'Categoría', 'Detalle', 'Monto', 'Moneda', 'Cuenta', 'Cuenta destino', 'Monto destino', 'Medio de pago', 'Cuotas'];
+  const head = ['Fecha', 'Tipo', 'Categoría', 'Detalle', 'Monto', 'Moneda', 'Cuenta', 'Cuenta destino', 'Monto destino', 'Medio de pago', 'Cuotas', 'Compartido con', 'Mi parte', 'Pagó'];
   const rows = [...movements]
     .sort((a, b) => a.date.localeCompare(b.date))
     .map((m) => [
@@ -34,6 +34,9 @@ export function movementsCsv(movements: Movement[], settings: Settings): string 
       m.toAmount ? (m.toAmount / 100).toFixed(2).replace('.', ',') : '',
       METHOD_LABELS[m.method],
       m.installments,
+      settings.people.find((p) => p.key === (m.split?.personKey ?? m.personKey))?.name ?? '',
+      m.split ? (m.split.myPart / 100).toFixed(2).replace('.', ',') : '',
+      m.split ? (m.split.paidBy === 'me' ? 'Yo' : 'La otra persona') : '',
     ]);
   // BOM para que Excel lea bien los acentos
   return '﻿' + [head, ...rows].map((r) => r.map(csvCell).join(';')).join('\n');

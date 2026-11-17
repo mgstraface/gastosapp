@@ -7,7 +7,10 @@ import {
   defaultSettings,
   loginSchema,
   movementInputSchema,
+  parseTextSchema,
   settingsSchema,
+  ticketSchema,
+  todayAR,
   updateUserSchema,
 } from '@gastosapp/shared';
 import {
@@ -22,8 +25,10 @@ import {
   startSession,
   verifyPassword,
 } from './auth';
+import { AiError, dollarRates, parseText, parseTicket, type Usage } from './ai';
 import { dbReady } from './config/db';
-import { MovementDoc, SettingsDoc, User, toMovement, toSessionUser } from './models';
+import { env } from './config/env';
+import { AiUsage, MovementDoc, SettingsDoc, User, toMovement, toSessionUser } from './models';
 
 type Handler = (req: Request, res: Response) => Promise<unknown>;
 const h = (fn: Handler) => (req: Request, res: Response, next: NextFunction) => {
@@ -37,6 +42,35 @@ async function settingsOf(userId: string) {
   const doc = await SettingsDoc.findOne({ userId }).lean();
   const parsed = settingsSchema.safeParse(doc?.data);
   return parsed.success ? parsed.data : defaultSettings();
+}
+
+/** IA disponible (hay clave) y cuántas consultas le quedan hoy a la persona. */
+async function aiStatus(userId: string) {
+  if (!env.ANTHROPIC_API_KEY) return { enabled: false, remaining: 0 };
+  const used = await AiUsage.countDocuments({ userId, date: todayAR() });
+  return { enabled: true, remaining: Math.max(0, env.AI_DAILY_LIMIT - used) };
+}
+
+/** Corre una consulta a la IA respetando el tope diario y registrando el uso. Devuelve null si ya respondió con error. */
+async function withAi<T>(req: Request, res: Response, kind: string, fn: () => Promise<{ usage: Usage } & T>): Promise<T | null> {
+  const date = todayAR();
+  const used = await AiUsage.countDocuments({ userId: req.user!.id, date });
+  if (used >= env.AI_DAILY_LIMIT) {
+    res.status(429).json({ error: 'Por hoy ya se usaron todas las consultas a la IA. Mañana seguimos.' });
+    return null;
+  }
+  try {
+    const out = await fn();
+    await AiUsage.create({ userId: req.user!.id, date, kind, model: env.AI_MODEL, ...out.usage, ok: true });
+    return out;
+  } catch (err) {
+    if (err instanceof AiError) {
+      if (err.status !== 503 || env.ANTHROPIC_API_KEY) await AiUsage.create({ userId: req.user!.id, date, kind, model: env.AI_MODEL, ok: false });
+      res.status(err.status).json({ error: err.message });
+      return null;
+    }
+    throw err;
+  }
 }
 
 const importSchema = z.object({ movements: z.array(movementInputSchema).max(20000) });
@@ -68,7 +102,7 @@ export function apiRouter(): Router {
       }
       loginOk(key);
       await startSession(res, String(user._id));
-      res.json({ user: toSessionUser(user), settings: await settingsOf(String(user._id)) });
+      res.json({ user: toSessionUser(user), settings: await settingsOf(String(user._id)), ai: await aiStatus(String(user._id)) });
     }),
   );
 
@@ -84,7 +118,7 @@ export function apiRouter(): Router {
     '/auth/me',
     requireUser,
     h(async (req, res) => {
-      res.json({ user: req.user, settings: await settingsOf(req.user!.id) });
+      res.json({ user: req.user, settings: await settingsOf(req.user!.id), ai: await aiStatus(req.user!.id) });
     }),
   );
 
@@ -159,6 +193,40 @@ export function apiRouter(): Router {
       const id = oid(req.params.id!);
       if (id) await MovementDoc.deleteOne({ _id: id, userId: req.user!.id });
       res.status(204).end();
+    }),
+  );
+
+  /* ---------------- cotización del dólar ---------------- */
+
+  r.get(
+    '/rates',
+    requireUser,
+    h(async (_req, res) => {
+      res.json(await dollarRates());
+    }),
+  );
+
+  /* ---------------- carga asistida (texto y foto del ticket) ---------------- */
+
+  r.post(
+    '/ai/parse',
+    requireUser,
+    h(async (req, res) => {
+      const { text, today } = parseTextSchema.parse(req.body);
+      const settings = await settingsOf(req.user!.id);
+      const out = await withAi(req, res, 'texto', () => parseText(text, settings, today));
+      if (out) res.json({ draft: out.draft, ai: await aiStatus(req.user!.id) });
+    }),
+  );
+
+  r.post(
+    '/ai/ticket',
+    requireUser,
+    h(async (req, res) => {
+      const { image, mediaType, today } = ticketSchema.parse(req.body);
+      const settings = await settingsOf(req.user!.id);
+      const out = await withAi(req, res, 'ticket', () => parseTicket(image, mediaType, settings, today));
+      if (out) res.json({ draft: out.draft, ai: await aiStatus(req.user!.id) });
     }),
   );
 
@@ -280,6 +348,7 @@ export function apiRouter(): Router {
       await Promise.all([
         MovementDoc.deleteMany({ userId: id }),
         SettingsDoc.deleteOne({ userId: id }),
+        AiUsage.deleteMany({ userId: id }),
         endAllSessions(String(id)),
         User.deleteOne({ _id: id }),
       ]);

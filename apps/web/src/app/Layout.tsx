@@ -3,6 +3,7 @@ import { NavLink, Outlet, useSearchParams } from 'react-router-dom';
 import { localDate, monthOf, monthSchema } from '@gastosapp/shared';
 import { MovementSheet } from '../features/movements/MovementSheet';
 import { RegisterContext, type MovementSheetTarget } from '../features/movements/registerContext';
+import { useStore } from '../lib/store';
 
 const tabs = [
   { to: '/', label: 'Mes', icon: IconMonth, end: true },
@@ -13,6 +14,7 @@ const tabs = [
 
 export function Layout() {
   const [target, setTarget] = useState<MovementSheetTarget | null>(null);
+  const toast = useStore((s) => s.toast);
   // Si se está mirando un mes anterior, el "+" propone el último día de ese mes.
   const [params] = useSearchParams();
   const mes = params.get('mes');
@@ -41,6 +43,11 @@ export function Layout() {
         </nav>
 
         <MovementSheet target={target} onClose={() => setTarget(null)} />
+        {toast && (
+          <div className="toast" role="status">
+            {toast}
+          </div>
+        )}
       </div>
     </RegisterContext.Provider>
   );

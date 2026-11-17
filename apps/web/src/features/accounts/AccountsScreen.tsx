@@ -1,12 +1,12 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { CURRENCIES, PALETTE, accountBalances, amountToInput, categoryKey, formatMoney, localDate, parseAmount, type Account, type AccountBalance, type Currency } from '@gastosapp/shared';
+import { CURRENCIES, PALETTE, accountBalances, amountToInput, categoryKey, convert, formatMoney, localDate, parseAmount, type Account, type AccountBalance, type Currency } from '@gastosapp/shared';
 import { Sheet } from '../../components/Sheet';
 import { errorText } from '../../lib/api';
-import { useSettings, useStore } from '../../lib/store';
+import { useRate, useSettings, useStore } from '../../lib/store';
 import { useRegister } from '../movements/registerContext';
 
-const EMOJIS = ['💵', '🏦', '💳', '📱', '🐷', '💰', '🪙', '📈', '🏠', '✈️', '🎯', '🧾'];
+const EMOJIS = ['💵', '🏦', '💳', '🟦', '🟧', '📱', '🐷', '💰', '🪙', '📈', '🏠', '✈️', '🎯', '🧾'];
 
 type Edit = { mode: 'new' } | { mode: 'edit'; row: AccountBalance };
 
@@ -17,8 +17,11 @@ export function AccountsScreen() {
   const [edit, setEdit] = useState<Edit | null>(null);
   const [showArchived, setShowArchived] = useState(false);
 
+  const rate = useRate();
   const b = useMemo(() => accountBalances(movements, settings, localDate()), [movements, settings]);
-  const active = b.accounts.filter((r) => !r.account.archived);
+  const active = b.accounts.filter((r) => !r.account.archived && r.account.type === 'normal');
+  const cards = b.accounts.filter((r) => !r.account.archived && r.account.type === 'tarjeta');
+  const usdInArs = convert(b.totals.USD, 'USD', 'ARS', rate);
   const archived = b.accounts.filter((r) => r.account.archived);
   const hasUsd = active.some((r) => r.account.currency === 'USD');
 
@@ -33,6 +36,12 @@ export function AccountsScreen() {
         <p className="hero-label">Total</p>
         <p className="hero-amount">{formatMoney(b.totals.ARS, 'ARS')}</p>
         {hasUsd && <p className="hero-sub">+ {formatMoney(b.totals.USD, 'USD')}</p>}
+        {hasUsd && usdInArs !== null && rate && (
+          <p className="hero-label">
+            Todo en pesos: {formatMoney(b.totals.ARS + usdInArs, 'ARS')} · dólar a {formatMoney(Math.round(rate * 100), 'ARS')}
+          </p>
+        )}
+        {cards.some((r) => r.balance < 0) && <p className="hero-label">Ya descuenta lo que debés en tarjetas.</p>}
       </section>
 
       <section className="card">
@@ -44,7 +53,10 @@ export function AccountsScreen() {
                   {r.account.emoji}
                 </span>
                 <span className="mov-text">
-                  <strong>{r.account.name}</strong>
+                  <strong>
+                    {r.account.name}
+                    {r.account.savings && <span className="badge">ahorro</span>}
+                  </strong>
                   {r.pendingInstallments > 0 && <small>Cuotas por venir: {formatMoney(r.pendingInstallments, r.account.currency)}</small>}
                 </span>
                 <span className={`mov-amount${r.balance < 0 ? ' neg' : ''}`}>{formatMoney(r.balance, r.account.currency)}</span>
@@ -61,6 +73,58 @@ export function AccountsScreen() {
           </button>
         </div>
       </section>
+
+      {cards.length > 0 && (
+        <section className="card">
+          <h2>Tarjetas de crédito</h2>
+          <ul className="plain-list">
+            {cards.map((r) => {
+              const debt = -r.balance;
+              return (
+                <li key={r.account.key} className="card-row">
+                  <button type="button" className="cat-line" onClick={() => setEdit({ mode: 'edit', row: r })}>
+                    <span className="mov-icon" style={{ background: `${r.account.color}22` }} aria-hidden="true">
+                      {r.account.emoji}
+                    </span>
+                    <span className="mov-text">
+                      <strong>{r.account.name}</strong>
+                      <small>
+                        Próximo mes: {formatMoney(r.dueNextMonth, r.account.currency)}
+                        {r.pendingInstallments > 0 ? ` · cuotas por venir ${formatMoney(r.pendingInstallments, r.account.currency)}` : ''}
+                      </small>
+                    </span>
+                    <span className={`mov-amount${debt > 0 ? ' neg' : ''}`}>
+                      {debt > 0 ? formatMoney(debt, r.account.currency) : debt < 0 ? `a favor ${formatMoney(-debt, r.account.currency)}` : 'Al día'}
+                      {debt > 0 && <small>a pagar</small>}
+                    </span>
+                  </button>
+                  {debt > 0 && (
+                    <button
+                      type="button"
+                      className="btn-quiet small"
+                      onClick={() =>
+                        open({
+                          mode: 'new',
+                          prefill: {
+                            kind: 'transferencia',
+                            amount: debt,
+                            toAccountKey: r.account.key,
+                            accountKey: active.find((a) => a.account.currency === r.account.currency)?.account.key ?? null,
+                            description: `Pago ${r.account.name}`,
+                          },
+                        })
+                      }
+                    >
+                      Pagar {r.account.name}
+                    </button>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+          <p className="hint">Lo que comprás con la tarjeta suma a "a pagar" cuota por cuota, a medida que llega cada mes. Al pagar el resumen, cargalo como transferencia a la tarjeta.</p>
+        </section>
+      )}
 
       {b.unassignedCount > 0 && (
         <div className="notice">
@@ -105,7 +169,7 @@ export function AccountsScreen() {
       )}
 
       <p className="hint page-foot">
-        Los gastos con tarjeta de crédito se descuentan de la cuenta que elegiste, cuota a cuota, a medida que llega cada mes. <Link to="/categorias" className="link">Categorías y presupuestos ›</Link>
+        Las cuentas marcadas como ahorro suman en "Ahorraste este mes" cuando les pasás plata. <Link to="/categorias" className="link">Categorías y presupuestos ›</Link>
       </p>
 
       <AccountSheet edit={edit} onClose={() => setEdit(null)} />
@@ -123,6 +187,8 @@ function AccountSheet({ edit, onClose }: { edit: Edit | null; onClose: () => voi
   const [currency, setCurrency] = useState<Currency>('ARS');
   const [balanceText, setBalanceText] = useState('');
   const [negative, setNegative] = useState(false);
+  const [type, setType] = useState<'normal' | 'tarjeta'>('normal');
+  const [savings, setSavings] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastEdit, setLastEdit] = useState<Edit | null>(null);
@@ -137,8 +203,12 @@ function AccountSheet({ edit, onClose }: { edit: Edit | null; onClose: () => voi
       setEmoji(a.emoji);
       setColor(a.color);
       setCurrency(a.currency);
-      setBalanceText(edit.row.balance ? amountToInput(Math.abs(edit.row.balance)) : '0');
-      setNegative(edit.row.balance < 0);
+      setType(a.type);
+      setSavings(a.savings);
+      // En una tarjeta se pregunta lo que debés (positivo)
+      const shown = a.type === 'tarjeta' ? -edit.row.balance : edit.row.balance;
+      setBalanceText(shown ? amountToInput(Math.abs(shown)) : '0');
+      setNegative(shown < 0);
     } else if (edit) {
       setName('');
       setEmoji('🏦');
@@ -146,6 +216,8 @@ function AccountSheet({ edit, onClose }: { edit: Edit | null; onClose: () => voi
       setCurrency(settings.currency);
       setBalanceText('');
       setNegative(false);
+      setType('normal');
+      setSavings(false);
     }
   }
 
@@ -154,7 +226,9 @@ function AccountSheet({ edit, onClose }: { edit: Edit | null; onClose: () => voi
   const trimmed = balanceText.trim();
   const parsed = trimmed === '' || trimmed === '0' ? 0 : parseAmount(trimmed);
   const balanceInvalid = parsed === null;
-  const desired = (parsed ?? 0) * (negative ? -1 : 1);
+  const entered = (parsed ?? 0) * (negative ? -1 : 1);
+  // Tarjeta: lo que escribís es lo que debés, el saldo es negativo
+  const desired = type === 'tarjeta' ? -entered : entered;
 
   const persist = async (accounts: Account[]) => {
     setBusy(true);
@@ -175,19 +249,21 @@ function AccountSheet({ edit, onClose }: { edit: Edit | null; onClose: () => voi
       const fromMovements = row.balance - row.account.initialBalance;
       void persist(
         settings.accounts.map((a) =>
-          a.key === row.account.key ? { ...a, name: name.trim(), emoji, color, currency: used ? a.currency : currency, initialBalance: desired - fromMovements } : a,
+          a.key === row.account.key
+            ? { ...a, name: name.trim(), emoji, color, currency: used ? a.currency : currency, initialBalance: desired - fromMovements, type, savings: type === 'normal' && savings }
+            : a,
         ),
       );
     } else {
       const key = categoryKey(name, settings.accounts.map((a) => a.key));
-      void persist([...settings.accounts, { key, name: name.trim(), emoji, color, currency, initialBalance: desired, archived: false }]);
+      void persist([...settings.accounts, { key, name: name.trim(), emoji, color, currency, initialBalance: desired, type, savings: type === 'normal' && savings, archived: false }]);
     }
   };
 
   const toggleArchive = () => {
     if (!row) return;
     const a = row.account;
-    if (!a.archived && settings.accounts.filter((x) => !x.archived).length <= 1) {
+    if (!a.archived && a.type === 'normal' && settings.accounts.filter((x) => !x.archived && x.type === 'normal').length <= 1) {
       setError('Tiene que quedar al menos una cuenta activa.');
       return;
     }
@@ -216,8 +292,26 @@ function AccountSheet({ edit, onClose }: { edit: Edit | null; onClose: () => voi
     >
       <label className="field">
         <span>Nombre</span>
-        <input value={name} maxLength={30} onChange={(e) => setName(e.target.value)} placeholder="Ej.: Mercado Pago, Galicia" />
+        <input value={name} maxLength={30} onChange={(e) => setName(e.target.value)} placeholder="Ej.: Mercado Pago, Galicia, Visa" />
       </label>
+
+      <fieldset className="field">
+        <legend>Tipo</legend>
+        <div className="segmented">
+          <button type="button" className={type === 'normal' ? 'is-on' : ''} disabled={used && type === 'tarjeta'} onClick={() => setType('normal')}>
+            Cuenta o billetera
+          </button>
+          <button type="button" className={type === 'tarjeta' ? 'is-on' : ''} disabled={used && type === 'normal'} onClick={() => setType('tarjeta')}>
+            Tarjeta de crédito
+          </button>
+        </div>
+        {type === 'normal' && (
+          <label className="toggle-row">
+            <input type="checkbox" checked={savings} onChange={(e) => setSavings(e.target.checked)} />
+            <span>Es una cuenta de ahorro (cuenta en "Ahorraste este mes")</span>
+          </label>
+        )}
+      </fieldset>
 
       <fieldset className="field">
         <legend>Moneda</legend>
@@ -232,7 +326,13 @@ function AccountSheet({ edit, onClose }: { edit: Edit | null; onClose: () => voi
       </fieldset>
 
       <label className="field">
-        <span>{row ? '¿Cuánto tenés hoy en esta cuenta?' : '¿Cuánto tenés hoy? (podés dejarlo en 0)'}</span>
+        <span>
+          {type === 'tarjeta'
+            ? '¿Cuánto debés hoy en la tarjeta? (lo del resumen que no pagaste)'
+            : row
+              ? '¿Cuánto tenés hoy en esta cuenta?'
+              : '¿Cuánto tenés hoy? (podés dejarlo en 0)'}
+        </span>
         <div className="amount-row small">
           <button type="button" className="currency-btn" onClick={() => setNegative((v) => !v)} aria-label="Cambiar signo">
             {negative ? '−' : ''}

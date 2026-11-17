@@ -1,9 +1,9 @@
 name: Deploy GastosApp al VPS
 
-# Cada push a main se despliega solo. También se puede correr a mano desde Actions → Run workflow.
+# Cada push se chequea (tipos + build). Si es a main y pasa, se despliega solo.
+# También se puede correr a mano desde Actions → Run workflow.
 on:
   push:
-    branches: [main]
   workflow_dispatch:
 
 concurrency:
@@ -11,7 +11,23 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund
+      - name: Tipos
+        run: npm run typecheck
+      - name: Build
+        run: npm run build
+
   deploy:
+    needs: check
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     # Hasta que se carguen los secrets del VPS, el push no intenta desplegar.

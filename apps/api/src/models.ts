@@ -51,11 +51,31 @@ const movementSchema = new Schema(
     description: { type: String, default: '' },
     method: { type: String, default: 'debito' },
     installments: { type: Number, default: 1 },
+    recurringKey: { type: String, default: null },
+    split: { type: Schema.Types.Mixed, default: null },
+    personKey: { type: String, default: null },
   },
   { timestamps: true, minimize: false },
 );
 movementSchema.index({ userId: 1, date: -1 });
 export const MovementDoc = mongoose.model('Movement', movementSchema);
+
+/* Uso de IA: solo contadores para el tope diario. Nunca el texto ni la foto. */
+const aiUsageSchema = new Schema(
+  {
+    userId: { type: Schema.Types.ObjectId, required: true },
+    date: { type: String, required: true },
+    /** texto | ticket */
+    kind: { type: String, default: 'texto' },
+    model: String,
+    inputTokens: { type: Number, default: 0 },
+    outputTokens: { type: Number, default: 0 },
+    ok: { type: Boolean, default: false },
+  },
+  { timestamps: true },
+);
+aiUsageSchema.index({ userId: 1, date: 1 });
+export const AiUsage = mongoose.model('AiUsage', aiUsageSchema);
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export function toSessionUser(u: any) {
@@ -76,6 +96,9 @@ export function toMovement(m: any): Movement {
     description: m.description ?? '',
     method: m.method,
     installments: m.installments ?? 1,
+    recurringKey: m.recurringKey ?? null,
+    split: m.split ?? null,
+    personKey: m.personKey ?? null,
     createdAt: new Date(m.createdAt).toISOString(),
   };
 }

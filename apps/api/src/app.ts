@@ -12,10 +12,10 @@ export function createApp() {
   // para leer la IP real en el freno de intentos de login.
   app.set('trust proxy', 'loopback, uniquelocal');
   app.use(helmet());
-  // Importar un respaldo puede traer miles de movimientos; el resto de los pedidos es chico.
+  // Importar un respaldo o mandar la foto de un ticket es pesado; el resto de los pedidos es chico.
   const bigJson = express.json({ limit: '5mb' });
   const smallJson = express.json({ limit: '200kb' });
-  app.use((req, res, next) => (req.path === '/api/v1/me/import' ? bigJson(req, res, next) : smallJson(req, res, next)));
+  app.use((req, res, next) => (req.path === '/api/v1/me/import' || req.path === '/api/v1/ai/ticket' ? bigJson(req, res, next) : smallJson(req, res, next)));
   app.use(cookieParser());
   app.use(loadUser);
 

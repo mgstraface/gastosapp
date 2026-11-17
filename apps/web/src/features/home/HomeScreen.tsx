@@ -1,24 +1,40 @@
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { accountBalances, addMonths, daysInMonth, formatMoney, localDate, monthLabel, monthOf, monthSummary, monthlyTrend } from '@gastosapp/shared';
+import {
+  accountBalances,
+  addMonths,
+  convert,
+  daysInMonth,
+  formatMoney,
+  localDate,
+  monthLabel,
+  monthOf,
+  monthSummary,
+  monthlyTrend,
+  pendingRecurring,
+  personBalances,
+  recurringDate,
+} from '@gastosapp/shared';
 import { MonthPicker, useMonth } from '../../components/MonthPicker';
 import { MovementRow } from '../../components/MovementRow';
-import { useSettings, useStore } from '../../lib/store';
+import { useRate, useSettings, useStore } from '../../lib/store';
 import { useRegister } from '../movements/registerContext';
 
 export function HomeScreen() {
   const settings = useSettings();
   const movements = useStore((s) => s.movements);
   const user = useStore((s) => s.user);
+  const rate = useRate();
   const open = useRegister();
   const [month, setMonth] = useMonth();
   const cur = settings.currency;
-
-  const summary = useMemo(() => monthSummary(movements, month, settings, addMonths(month, 1)), [movements, month, settings]);
-  const trend = useMemo(() => monthlyTrend(movements, month, 6, cur), [movements, month, cur]);
-  const t = summary.totals[cur];
-  const other = summary.totals[cur === 'ARS' ? 'USD' : 'ARS'];
   const otherCur = cur === 'ARS' ? 'USD' : 'ARS';
+
+  const summary = useMemo(() => monthSummary(movements, month, settings, { nextMonth: addMonths(month, 1), rate }), [movements, month, settings, rate]);
+  const trend = useMemo(() => monthlyTrend(movements, month, 6, cur, rate), [movements, month, cur, rate]);
+  // Totales en la moneda principal (con la otra convertida si hay cotización)
+  const t = summary.main;
+  const other = summary.totals[otherCur];
   const hasOther = other.gastos > 0 || other.ingresos > 0;
 
   // Promedio por día: en el mes actual, sobre los días que pasaron.
@@ -32,6 +48,13 @@ export function HomeScreen() {
   const recent = summary.lines.slice(0, 6);
   const balances = useMemo(() => accountBalances(movements, settings, today), [movements, settings, today]);
   const accounts = balances.accounts.filter((r) => !r.account.archived);
+  const hasUsd = accounts.some((r) => r.account.currency === otherCur);
+  const otherInMain = convert(balances.totals[otherCur], otherCur, cur, rate);
+  const totalMoney = balances.totals[cur] + (otherInMain ?? 0);
+
+  // Fijos que faltan cargar (solo mirando este mes o los que vienen)
+  const pending = month >= monthOf(today) ? pendingRecurring(settings, movements, month) : [];
+  const people = useMemo(() => personBalances(movements, settings).filter((p) => p.balance.ARS !== 0 || p.balance.USD !== 0), [movements, settings]);
 
   return (
     <div className="page">
@@ -57,8 +80,8 @@ export function HomeScreen() {
             {/* Mes actual: lo que queda en las cuentas hoy. Meses pasados: ingresos − gastos de ese mes. */}
             {isCurrent ? (
               <>
-                <small>Te queda</small>
-                <strong className={balances.totals[cur] < 0 ? 'neg' : ''}>{formatMoney(balances.totals[cur], cur)}</strong>
+                <small>Te queda{hasUsd && otherInMain !== null ? ' (todo en pesos)' : ''}</small>
+                <strong className={totalMoney < 0 ? 'neg' : ''}>{formatMoney(totalMoney, cur)}</strong>
               </>
             ) : (
               <>
@@ -71,26 +94,100 @@ export function HomeScreen() {
             <small>{isCurrent ? 'Por día (hasta hoy)' : 'Por día'}</small>
             <strong>{formatMoney(perDay, cur)}</strong>
           </div>
-          {totalBudget > 0 && (
+          {summary.saved !== 0 ? (
             <div>
-              <small>{t.gastos > totalBudget ? 'Te pasaste' : 'Te queda'}</small>
-              <strong className={t.gastos > totalBudget ? 'neg' : ''}>{formatMoney(Math.abs(totalBudget - t.gastos), cur)}</strong>
+              <small>{summary.saved > 0 ? 'Ahorraste' : 'Sacaste del ahorro'}</small>
+              <strong>{formatMoney(Math.abs(summary.saved), cur)}</strong>
             </div>
+          ) : (
+            totalBudget > 0 && (
+              <div>
+                <small>{t.gastos > totalBudget ? 'Te pasaste del presupuesto' : 'Queda de presupuesto'}</small>
+                <strong className={t.gastos > totalBudget ? 'neg' : ''}>{formatMoney(Math.abs(totalBudget - t.gastos), cur)}</strong>
+              </div>
+            )
           )}
         </div>
         {hasOther && (
           <p className="hero-other">
-            En {otherCur === 'USD' ? 'dólares' : 'pesos'}: gastos {formatMoney(other.gastos, otherCur)} · ingresos {formatMoney(other.ingresos, otherCur)}
+            {t.converted && rate
+              ? `Incluye ${formatMoney(other.gastos, otherCur)} en gastos en ${otherCur === 'USD' ? 'dólares' : 'pesos'}, a ${formatMoney(Math.round(rate * 100), 'ARS')}.`
+              : `En ${otherCur === 'USD' ? 'dólares' : 'pesos'}: gastos ${formatMoney(other.gastos, otherCur)} · ingresos ${formatMoney(other.ingresos, otherCur)}`}
           </p>
         )}
       </section>
+
+      {settings.budgetAlerts &&
+        summary.alerts.map((r) => (
+          <Link key={r.category.key} to="/categorias" className={`notice alert${r.ratio! > 1 ? ' is-over' : ''}`}>
+            {r.category.emoji}{' '}
+            {r.ratio! > 1
+              ? `Te pasaste del tope de ${r.category.name}: ${formatMoney(r.total, cur)} de ${formatMoney(r.category.budget!, cur)}.`
+              : `${r.category.name}: vas por el ${Math.round(r.ratio! * 100)} % del tope (quedan ${formatMoney(r.category.budget! - r.total, cur)}).`}
+          </Link>
+        ))}
+
+      {pending.length > 0 && (
+        <section className="card">
+          <header className="card-head">
+            <h2>Fijos por cargar</h2>
+            <Link to="/fijos" className="link">
+              Editar
+            </Link>
+          </header>
+          <ul className="plain-list">
+            {pending.map((r) => {
+              const c = settings.categories.find((x) => x.key === r.categoryKey);
+              const date = recurringDate(r, month);
+              const late = date < today;
+              return (
+                <li key={r.key}>
+                  <button
+                    type="button"
+                    className="cat-line"
+                    onClick={() =>
+                      open({
+                        mode: 'new',
+                        prefill: {
+                          kind: r.kind,
+                          amount: r.amount,
+                          categoryKey: r.categoryKey,
+                          accountKey: r.accountKey,
+                          description: r.description,
+                          date: date > today && isCurrent ? today : date,
+                          method: r.method,
+                          recurringKey: r.key,
+                        },
+                      })
+                    }
+                  >
+                    <span className="mov-icon" aria-hidden="true">
+                      {c?.emoji ?? '📌'}
+                    </span>
+                    <span className="mov-text">
+                      <strong>{r.description}</strong>
+                      <small className={late ? 'neg' : ''}>
+                        {r.kind === 'ingreso' ? 'Se cobra' : late ? 'Venció' : 'Vence'} el {Number(date.slice(8))}
+                      </small>
+                    </span>
+                    <span className={`mov-amount${r.kind === 'ingreso' ? ' is-income' : ''}`}>
+                      {formatMoney(r.amount, r.currency)}
+                      <small>Cargar ›</small>
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
 
       <Link to="/cuentas" className="card money-card">
         <header className="card-head">
           <h2>Tu plata hoy</h2>
           <span className="money-total">
-            {formatMoney(balances.totals.ARS, 'ARS')}
-            {accounts.some((r) => r.account.currency === 'USD') && <small> + {formatMoney(balances.totals.USD, 'USD')}</small>}
+            {formatMoney(balances.totals[cur], cur)}
+            {hasUsd && <small> + {formatMoney(balances.totals[otherCur], otherCur)}</small>}
           </span>
         </header>
         <div className="acc-strip">
@@ -101,8 +198,40 @@ export function HomeScreen() {
             </span>
           ))}
         </div>
+        {hasUsd && otherInMain !== null && rate && (
+          <small className="hint">
+            Todo en pesos: {formatMoney(totalMoney, cur)} (dólar a {formatMoney(Math.round(rate * 100), 'ARS')})
+          </small>
+        )}
         {balances.unassignedCount > 0 && <small className="hint">Hay {balances.unassignedCount} movimientos sin cuenta: tocá para ordenarlos.</small>}
       </Link>
+
+      {people.length > 0 && (
+        <Link to="/compartidos" className="card money-card">
+          <header className="card-head">
+            <h2>Compartidos</h2>
+            <span className="link">Ver ›</span>
+          </header>
+          <div className="acc-strip">
+            {people.map((p) => {
+              const person = settings.people.find((x) => x.key === p.key);
+              return (['ARS', 'USD'] as const)
+                .filter((c) => p.balance[c] !== 0)
+                .map((c) => (
+                  <span key={p.key + c} className="acc-pill">
+                    <span>
+                      {person?.emoji} {person?.name ?? p.key}
+                    </span>
+                    <strong className={p.balance[c] < 0 ? 'neg' : 'pos'}>
+                      {p.balance[c] > 0 ? 'Te debe ' : 'Le debés '}
+                      {formatMoney(Math.abs(p.balance[c]), c)}
+                    </strong>
+                  </span>
+                ));
+            })}
+          </div>
+        </Link>
+      )}
 
       {summary.nextMonthCommitted > 0 && (
         <p className="notice">

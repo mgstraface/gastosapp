@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { CURRENCIES, localDate, type Movement, type Settings } from '@gastosapp/shared';
+import { CURRENCIES, DOLLAR_LABELS, formatMoney, localDate, parseAmount, rateFor, type DollarSource, type Movement, type Settings } from '@gastosapp/shared';
 import { api, errorText } from '../../lib/api';
 import { download, movementsCsv } from '../../lib/files';
 import { useSettings, useStore } from '../../lib/store';
@@ -52,10 +52,19 @@ export function SettingsScreen() {
       const accKeys = new Set(settings.accounts.map((a) => a.key));
       const extraCats = (data.settings?.categories ?? []).filter((c) => !catKeys.has(c.key));
       const extraAccs = (data.settings?.accounts ?? []).filter((a) => !accKeys.has(a.key));
-      if (extraCats.length || extraAccs.length) {
-        await saveSettings({ ...settings, categories: [...settings.categories, ...extraCats], accounts: [...settings.accounts, ...extraAccs] });
+      const extraPeople = (data.settings?.people ?? []).filter((p) => !settings.people.some((x) => x.key === p.key));
+      if (extraCats.length || extraAccs.length || extraPeople.length) {
+        await saveSettings({
+          ...settings,
+          categories: [...settings.categories, ...extraCats],
+          accounts: [...settings.accounts, ...extraAccs],
+          people: [...settings.people, ...extraPeople],
+        });
       }
-      const movs = data.movements.map(({ kind, amount, currency, categoryKey, accountKey, toAccountKey, toAmount, date, description, method, installments }) => ({
+      const movs = data.movements.map(({ kind, amount, currency, categoryKey, accountKey, toAccountKey, toAmount, date, description, method, installments, recurringKey, split, personKey }) => ({
+        recurringKey: recurringKey ?? null,
+        split: split ?? null,
+        personKey: personKey ?? null,
         kind,
         amount,
         currency,
@@ -96,6 +105,24 @@ export function SettingsScreen() {
             </button>
           ))}
         </div>
+      </section>
+
+      <DollarCard />
+
+      <section className="card stack">
+        <Link to="/fijos" className="btn-quiet as-btn">
+          📌 Gastos e ingresos fijos
+        </Link>
+        <Link to="/compartidos" className="btn-quiet as-btn">
+          👥 Gastos compartidos
+        </Link>
+        <Link to="/categorias" className="btn-quiet as-btn">
+          🏷️ Categorías y presupuestos
+        </Link>
+        <label className="toggle-row">
+          <input type="checkbox" checked={settings.budgetAlerts} disabled={busy} onChange={(e) => void run(async () => saveSettings({ ...settings, budgetAlerts: e.target.checked }))} />
+          <span>Avisarme cuando llego al 80 % del tope de una categoría</span>
+        </label>
       </section>
 
       <PasswordCard />
@@ -151,9 +178,6 @@ export function SettingsScreen() {
       </section>
 
       <section className="card stack">
-        <Link to="/categorias" className="btn-quiet as-btn">
-          Categorías y presupuestos
-        </Link>
         {user?.role === 'admin' && (
           <Link to="/admin" className="btn-quiet as-btn">
             Administrar usuarios
@@ -164,6 +188,67 @@ export function SettingsScreen() {
         </button>
       </section>
     </div>
+  );
+}
+
+function DollarCard() {
+  const settings = useSettings();
+  const rates = useStore((s) => s.rates);
+  const saveSettings = useStore((s) => s.saveSettings);
+  const [manual, setManual] = useState(settings.dollar.manualRate ? String(settings.dollar.manualRate).replace('.', ',') : '');
+  const [error, setError] = useState<string | null>(null);
+  const rate = rateFor(settings, rates);
+
+  const pick = async (source: DollarSource) => {
+    setError(null);
+    try {
+      const m = parseAmount(manual);
+      await saveSettings({ ...settings, dollar: { source, manualRate: source === 'manual' ? (m ? m / 100 : settings.dollar.manualRate) : settings.dollar.manualRate } });
+    } catch (err) {
+      setError(errorText(err));
+    }
+  };
+
+  const saveManual = async () => {
+    const m = parseAmount(manual);
+    if (!m) return setError('Escribí cuántos pesos vale un dólar, por ejemplo 1450.');
+    setError(null);
+    try {
+      await saveSettings({ ...settings, dollar: { source: 'manual', manualRate: m / 100 } });
+    } catch (err) {
+      setError(errorText(err));
+    }
+  };
+
+  return (
+    <section className="card">
+      <h2>Cotización del dólar</h2>
+      <p className="hint">Se usa para sumar lo que tenés y gastás en dólares junto con los pesos. Se toma el valor de venta.</p>
+      <div className="chips">
+        {(Object.keys(DOLLAR_LABELS) as DollarSource[]).map((k) => {
+          const v = k === 'manual' ? settings.dollar.manualRate : (rates?.rates[k]?.venta ?? null);
+          return (
+            <button key={k} type="button" className={`chip-btn${settings.dollar.source === k ? ' is-on' : ''}`} onClick={() => void pick(k)}>
+              {DOLLAR_LABELS[k]}
+              {v ? ` · ${formatMoney(Math.round(v * 100), 'ARS')}` : ''}
+            </button>
+          );
+        })}
+      </div>
+      {settings.dollar.source === 'manual' && (
+        <div className="quick-row">
+          <input inputMode="decimal" value={manual} onChange={(e) => setManual(e.target.value.replace(/[^\d.,]/g, ''))} placeholder="Pesos por dólar, ej. 1450" />
+          <button type="button" className="btn-quiet" onClick={() => void saveManual()}>
+            Usar
+          </button>
+        </div>
+      )}
+      <p className="hint">
+        {rate ? `Usando ${formatMoney(Math.round(rate * 100), 'ARS')} por dólar.` : 'Sin cotización por ahora: pesos y dólares se muestran por separado.'}
+        {settings.dollar.source !== 'manual' && rates?.updatedAt ? ` Actualizada ${new Date(rates.updatedAt).toLocaleString('es-AR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}.` : ''}
+      </p>
+      {error && <p className="form-error">{error}</p>}
+    </section>
   );
 }
 

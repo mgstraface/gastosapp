@@ -5,3 +5,5 @@ export * from './settings';
 export * from './movement';
 export * from './summary';
 export * from './accounts';
+export * from './rates';
+export * from './ai';

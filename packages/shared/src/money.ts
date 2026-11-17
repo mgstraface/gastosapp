@@ -44,3 +44,13 @@ export function amountToInput(cents: number): string {
   const v = cents / 100;
   return Number.isInteger(v) ? String(v) : v.toFixed(2).replace('.', ',');
 }
+
+/**
+ * Pasa un monto de una moneda a otra con `rate` = pesos por dólar.
+ * Sin cotización (null) solo puede devolver montos en la misma moneda.
+ */
+export function convert(cents: number, from: Currency, to: Currency, rate: number | null): number | null {
+  if (from === to) return cents;
+  if (!rate) return null;
+  return Math.round(to === 'ARS' ? cents * rate : cents / rate);
+}

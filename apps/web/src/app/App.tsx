@@ -7,6 +7,8 @@ import { HomeScreen } from '../features/home/HomeScreen';
 import { MovementsScreen } from '../features/movements/MovementsScreen';
 import { CategoriesScreen } from '../features/categories/CategoriesScreen';
 import { AccountsScreen } from '../features/accounts/AccountsScreen';
+import { RecurringScreen } from '../features/recurring/RecurringScreen';
+import { SharedScreen } from '../features/shared/SharedScreen';
 import { SettingsScreen } from '../features/settings/SettingsScreen';
 import { AdminScreen } from '../features/admin/AdminScreen';
 
@@ -52,6 +54,8 @@ export function App() {
           <Route path="movimientos" element={<MovementsScreen />} />
           <Route path="cuentas" element={<AccountsScreen />} />
           <Route path="categorias" element={<CategoriesScreen />} />
+          <Route path="fijos" element={<RecurringScreen />} />
+          <Route path="compartidos" element={<SharedScreen />} />
           <Route path="yo" element={<SettingsScreen />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>

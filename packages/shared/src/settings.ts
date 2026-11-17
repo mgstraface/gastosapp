@@ -26,11 +26,53 @@ export const accountSchema = z.object({
   currency: currencySchema.default('ARS'),
   /** Saldo antes del primer movimiento cargado (centavos, puede ser negativo). Se ajusta desde "Saldo hoy". */
   initialBalance: z.number().int().min(-1e13).max(1e13).default(0),
+  /** normal: plata que tenés. tarjeta: tarjeta de crédito, el saldo es lo que debés. */
+  type: z.enum(['normal', 'tarjeta']).default('normal'),
+  /** Cuenta de ahorro: lo que pasás acá cuenta en "Ahorraste este mes". */
+  savings: z.boolean().default(false),
   archived: z.boolean().default(false),
 });
 export type Account = z.infer<typeof accountSchema>;
 
-export const DEFAULT_ACCOUNTS: Account[] = [{ key: 'efectivo', name: 'Efectivo', emoji: '💵', color: '#7a9e4b', currency: 'ARS', initialBalance: 0, archived: false }];
+export const DEFAULT_ACCOUNTS: Account[] = [
+  { key: 'efectivo', name: 'Efectivo', emoji: '💵', color: '#7a9e4b', currency: 'ARS', initialBalance: 0, type: 'normal', savings: false, archived: false },
+];
+
+/** Gastos e ingresos que se repiten todos los meses (alquiler, servicios, suscripciones, sueldo). */
+export const recurringSchema = z.object({
+  key: z.string().regex(/^[a-z0-9-]{1,40}$/),
+  kind: kindSchema.default('gasto'),
+  description: z.string().trim().min(1, 'Ponele un nombre').max(60),
+  /** Monto estimado en centavos (al confirmar se puede cambiar) */
+  amount: z.number().int().positive().max(1e13),
+  currency: currencySchema.default('ARS'),
+  categoryKey: z.string().min(1).max(40),
+  accountKey: z.string().max(40).nullable().default(null),
+  method: z.enum(['efectivo', 'debito', 'credito', 'transferencia', 'otro']).default('debito'),
+  /** Día del mes en que vence o se cobra */
+  day: z.number().int().min(1).max(31).default(1),
+  active: z.boolean().default(true),
+});
+export type Recurring = z.infer<typeof recurringSchema>;
+
+/** Personas con las que se comparten gastos. */
+export const personSchema = z.object({
+  key: z.string().regex(/^[a-z0-9-]{1,40}$/),
+  name: z.string().trim().min(1, 'Ponele un nombre').max(30),
+  emoji: z.string().max(8).default('🙂'),
+});
+export type Person = z.infer<typeof personSchema>;
+
+export const dollarSourceSchema = z.enum(['blue', 'bolsa', 'oficial', 'tarjeta', 'manual']);
+export type DollarSource = z.infer<typeof dollarSourceSchema>;
+export const DOLLAR_LABELS: Record<DollarSource, string> = { blue: 'Blue', bolsa: 'MEP', oficial: 'Oficial', tarjeta: 'Tarjeta', manual: 'A mano' };
+
+export const dollarSettingsSchema = z.object({
+  /** Qué cotización usar para pasar dólares a pesos (o al revés). */
+  source: dollarSourceSchema.default('bolsa'),
+  /** Pesos por dólar, si source = manual */
+  manualRate: z.number().positive().max(1e7).nullable().default(null),
+});
 
 export const settingsSchema = z
   .object({
@@ -39,6 +81,11 @@ export const settingsSchema = z
     categories: z.array(categorySchema).min(1).max(80),
     /** Dónde está la plata. Los ajustes guardados antes de que existieran arrancan con "Efectivo". */
     accounts: z.array(accountSchema).max(40).default(() => DEFAULT_ACCOUNTS.map((a) => ({ ...a }))),
+    recurring: z.array(recurringSchema).max(100).default([]),
+    people: z.array(personSchema).max(40).default([]),
+    dollar: dollarSettingsSchema.default({ source: 'bolsa', manualRate: null }),
+    /** Avisar cuando una categoría llega al 80 % o se pasa del tope */
+    budgetAlerts: z.boolean().default(true),
   })
   .refine((s) => new Set(s.categories.map((c) => c.key)).size === s.categories.length, {
     message: 'Hay dos categorías con el mismo identificador',
@@ -72,6 +119,10 @@ export const defaultSettings = (): Settings => ({
   currency: 'ARS',
   categories: DEFAULT_CATEGORIES.map((c) => ({ ...c })),
   accounts: DEFAULT_ACCOUNTS.map((a) => ({ ...a })),
+  recurring: [],
+  people: [],
+  dollar: { source: 'bolsa', manualRate: null },
+  budgetAlerts: true,
 });
 
 /** "Comida afuera" → "comida-afuera", sin chocar con las que ya existen. Sirve también para cuentas. */
