@@ -54,8 +54,9 @@ export function HomeScreen() {
             <strong>{formatMoney(t.ingresos, cur)}</strong>
           </div>
           <div>
-            <small>Balance</small>
-            <strong className={t.balance < 0 ? 'neg' : ''}>{formatMoney(t.balance, cur, { sign: true })}</strong>
+            {/* Resultado del mes (ingresos − gastos). La plata total está en "Tu plata hoy". */}
+            <small>{t.balance < 0 ? 'Gastaste de más' : 'Te sobró este mes'}</small>
+            <strong className={t.balance < 0 ? 'neg' : ''}>{formatMoney(Math.abs(t.balance), cur)}</strong>
           </div>
           <div>
             <small>{isCurrent ? 'Por día (hasta hoy)' : 'Por día'}</small>
