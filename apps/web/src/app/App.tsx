@@ -6,6 +6,7 @@ import { LoginScreen } from '../features/auth/LoginScreen';
 import { HomeScreen } from '../features/home/HomeScreen';
 import { MovementsScreen } from '../features/movements/MovementsScreen';
 import { CategoriesScreen } from '../features/categories/CategoriesScreen';
+import { AccountsScreen } from '../features/accounts/AccountsScreen';
 import { SettingsScreen } from '../features/settings/SettingsScreen';
 import { AdminScreen } from '../features/admin/AdminScreen';
 
@@ -49,6 +50,7 @@ export function App() {
         <Route element={<Layout />}>
           <Route index element={<HomeScreen />} />
           <Route path="movimientos" element={<MovementsScreen />} />
+          <Route path="cuentas" element={<AccountsScreen />} />
           <Route path="categorias" element={<CategoriesScreen />} />
           <Route path="yo" element={<SettingsScreen />} />
           <Route path="*" element={<Navigate to="/" replace />} />

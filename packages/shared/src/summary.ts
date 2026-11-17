@@ -48,8 +48,9 @@ export function monthSummary(movements: Movement[], month: string, settings: Set
     ARS: { gastos: 0, ingresos: 0, balance: 0 },
     USD: { gastos: 0, ingresos: 0, balance: 0 },
   };
-  const cats = new Map<string, { total: number; count: number; kind: 'gasto' | 'ingreso' }>();
+  const cats = new Map<string, { total: number; count: number; kind: string }>();
   for (const l of lines) {
+    if (l.movement.kind === 'transferencia') continue;
     const t = totals[l.movement.currency];
     if (l.movement.kind === 'gasto') t.gastos += l.amount;
     else t.ingresos += l.amount;
@@ -106,7 +107,7 @@ export function monthlyTrend(movements: Movement[], month: string, n: number, cu
       const l = lineForMonth(m, mm);
       if (!l) continue;
       if (m.kind === 'gasto') gastos += l.amount;
-      else ingresos += l.amount;
+      else if (m.kind === 'ingreso') ingresos += l.amount;
     }
     out.push({ month: mm, gastos, ingresos });
   }

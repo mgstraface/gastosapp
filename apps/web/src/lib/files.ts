@@ -1,4 +1,4 @@
-import { METHOD_LABELS, categoryOf, type Movement, type Settings } from '@gastosapp/shared';
+import { METHOD_LABELS, accountOf, categoryOf, type Movement, type Settings } from '@gastosapp/shared';
 
 export function download(name: string, content: string, type: string) {
   const blob = new Blob([content], { type });
@@ -19,16 +19,19 @@ const csvCell = (v: string | number) => {
 
 /** CSV con punto y coma y coma decimal: abre directo en Excel/Sheets configurados en español. */
 export function movementsCsv(movements: Movement[], settings: Settings): string {
-  const head = ['Fecha', 'Tipo', 'Categoría', 'Detalle', 'Monto', 'Moneda', 'Medio de pago', 'Cuotas'];
+  const head = ['Fecha', 'Tipo', 'Categoría', 'Detalle', 'Monto', 'Moneda', 'Cuenta', 'Cuenta destino', 'Monto destino', 'Medio de pago', 'Cuotas'];
   const rows = [...movements]
     .sort((a, b) => a.date.localeCompare(b.date))
     .map((m) => [
       m.date,
-      m.kind === 'gasto' ? 'Gasto' : 'Ingreso',
-      categoryOf(settings, m.categoryKey).name,
+      m.kind === 'gasto' ? 'Gasto' : m.kind === 'ingreso' ? 'Ingreso' : 'Transferencia',
+      m.kind === 'transferencia' ? '' : categoryOf(settings, m.categoryKey).name,
       m.description,
-      ((m.kind === 'gasto' ? -m.amount : m.amount) / 100).toFixed(2).replace('.', ','),
+      ((m.kind === 'ingreso' ? m.amount : -m.amount) / 100).toFixed(2).replace('.', ','),
       m.currency,
+      accountOf(settings, m.accountKey)?.name ?? '',
+      accountOf(settings, m.toAccountKey)?.name ?? '',
+      m.toAmount ? (m.toAmount / 100).toFixed(2).replace('.', ',') : '',
       METHOD_LABELS[m.method],
       m.installments,
     ]);

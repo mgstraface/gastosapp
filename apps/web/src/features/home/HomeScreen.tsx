@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { addMonths, daysInMonth, formatMoney, localDate, monthLabel, monthOf, monthSummary, monthlyTrend } from '@gastosapp/shared';
+import { accountBalances, addMonths, daysInMonth, formatMoney, localDate, monthLabel, monthOf, monthSummary, monthlyTrend } from '@gastosapp/shared';
 import { MonthPicker, useMonth } from '../../components/MonthPicker';
 import { MovementRow } from '../../components/MovementRow';
 import { useSettings, useStore } from '../../lib/store';
@@ -30,6 +30,8 @@ export function HomeScreen() {
   const totalBudget = settings.categories.reduce((s, c) => s + (c.kind === 'gasto' && !c.archived && c.budget ? c.budget : 0), 0);
   const trendMax = Math.max(1, ...trend.map((x) => Math.max(x.gastos, x.ingresos)));
   const recent = summary.lines.slice(0, 6);
+  const balances = useMemo(() => accountBalances(movements, settings, today), [movements, settings, today]);
+  const accounts = balances.accounts.filter((r) => !r.account.archived);
 
   return (
     <div className="page">
@@ -72,6 +74,25 @@ export function HomeScreen() {
           </p>
         )}
       </section>
+
+      <Link to="/cuentas" className="card money-card">
+        <header className="card-head">
+          <h2>Tu plata hoy</h2>
+          <span className="money-total">
+            {formatMoney(balances.totals.ARS, 'ARS')}
+            {accounts.some((r) => r.account.currency === 'USD') && <small> + {formatMoney(balances.totals.USD, 'USD')}</small>}
+          </span>
+        </header>
+        <div className="acc-strip">
+          {accounts.map((r) => (
+            <span key={r.account.key} className="acc-pill" style={{ borderColor: r.account.color }}>
+              <span aria-hidden="true">{r.account.emoji}</span> {r.account.name}
+              <strong className={r.balance < 0 ? 'neg' : ''}>{formatMoney(r.balance, r.account.currency)}</strong>
+            </span>
+          ))}
+        </div>
+        {balances.unassignedCount > 0 && <small className="hint">Hay {balances.unassignedCount} movimientos sin cuenta: tocá para ordenarlos.</small>}
+      </Link>
 
       {summary.nextMonthCommitted > 0 && (
         <p className="notice">

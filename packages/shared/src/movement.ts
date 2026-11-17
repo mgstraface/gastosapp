@@ -1,7 +1,6 @@
 import { z } from 'zod';
 import { addMonths, dateSchema, monthDiff, monthOf } from './dates';
 import { centsSchema, currencySchema } from './money';
-import { kindSchema } from './settings';
 
 export const methodSchema = z.enum(['efectivo', 'debito', 'credito', 'transferencia', 'otro']);
 export type Method = z.infer<typeof methodSchema>;
@@ -14,28 +13,57 @@ export const METHOD_LABELS: Record<Method, string> = {
   otro: 'Otro',
 };
 
+/** Gasto o ingreso cuentan en el mes; una transferencia solo mueve plata entre cuentas. */
+export const movementKindSchema = z.enum(['gasto', 'ingreso', 'transferencia']);
+export type MovementKind = z.infer<typeof movementKindSchema>;
+
 export const movementInputSchema = z
   .object({
-    kind: kindSchema.default('gasto'),
+    kind: movementKindSchema.default('gasto'),
     /** Monto TOTAL en centavos. Si es en cuotas, cada mes cuenta amount / installments. */
     amount: centsSchema,
     currency: currencySchema.default('ARS'),
-    categoryKey: z.string().min(1).max(40),
+    /** Vacío en las transferencias */
+    categoryKey: z.string().max(40).default(''),
+    /** Cuenta de donde sale (gasto, transferencia) o a donde entra (ingreso). null = sin asignar (movimientos viejos). */
+    accountKey: z.string().max(40).nullable().default(null),
+    /** Transferencias: cuenta destino */
+    toAccountKey: z.string().max(40).nullable().default(null),
+    /** Transferencias entre monedas distintas (comprar o vender dólares): lo que entra en la cuenta destino */
+    toAmount: centsSchema.nullable().default(null),
     date: dateSchema,
     description: z.string().trim().max(120).default(''),
     method: methodSchema.default('debito'),
     /** Cuotas: solo para gastos con crédito. 1 = un solo pago. */
     installments: z.number().int().min(1).max(60).default(1),
   })
-  .transform((m) => ({ ...m, installments: m.kind === 'gasto' && m.method === 'credito' ? m.installments : 1 }));
+  .superRefine((m, ctx) => {
+    if (m.kind === 'transferencia') {
+      if (!m.accountKey || !m.toAccountKey) ctx.addIssue({ code: 'custom', message: 'Elegí de qué cuenta sale y a cuál entra', path: ['toAccountKey'] });
+      else if (m.accountKey === m.toAccountKey) ctx.addIssue({ code: 'custom', message: 'La cuenta de origen y la de destino son la misma', path: ['toAccountKey'] });
+    } else if (!m.categoryKey) {
+      ctx.addIssue({ code: 'custom', message: 'Elegí una categoría', path: ['categoryKey'] });
+    }
+  })
+  .transform((m) => ({
+    ...m,
+    installments: m.kind === 'gasto' && m.method === 'credito' ? m.installments : 1,
+    categoryKey: m.kind === 'transferencia' ? '' : m.categoryKey,
+    toAccountKey: m.kind === 'transferencia' ? m.toAccountKey : null,
+    toAmount: m.kind === 'transferencia' ? m.toAmount : null,
+    method: m.kind === 'transferencia' ? ('transferencia' as const) : m.method,
+  }));
 export type MovementInput = z.input<typeof movementInputSchema>;
 
 export interface Movement {
   id: string;
-  kind: 'gasto' | 'ingreso';
+  kind: MovementKind;
   amount: number;
   currency: 'ARS' | 'USD';
   categoryKey: string;
+  accountKey: string | null;
+  toAccountKey: string | null;
+  toAmount: number | null;
   date: string;
   description: string;
   method: Method;

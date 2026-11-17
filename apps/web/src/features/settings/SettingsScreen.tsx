@@ -47,15 +47,22 @@ export function SettingsScreen() {
         throw new Error('Ese archivo no es un respaldo de Gastos.');
       }
       if (!Array.isArray(data.movements)) throw new Error('Ese archivo no es un respaldo de Gastos.');
-      // Suma las categorías del respaldo que no existan acá, para que nada quede "sin categoría".
-      const keys = new Set(settings.categories.map((c) => c.key));
-      const extra = (data.settings?.categories ?? []).filter((c) => !keys.has(c.key));
-      if (extra.length) await saveSettings({ ...settings, categories: [...settings.categories, ...extra] });
-      const movs = data.movements.map(({ kind, amount, currency, categoryKey, date, description, method, installments }) => ({
+      // Suma las categorías y cuentas del respaldo que no existan acá, para que nada quede "sin categoría".
+      const catKeys = new Set(settings.categories.map((c) => c.key));
+      const accKeys = new Set(settings.accounts.map((a) => a.key));
+      const extraCats = (data.settings?.categories ?? []).filter((c) => !catKeys.has(c.key));
+      const extraAccs = (data.settings?.accounts ?? []).filter((a) => !accKeys.has(a.key));
+      if (extraCats.length || extraAccs.length) {
+        await saveSettings({ ...settings, categories: [...settings.categories, ...extraCats], accounts: [...settings.accounts, ...extraAccs] });
+      }
+      const movs = data.movements.map(({ kind, amount, currency, categoryKey, accountKey, toAccountKey, toAmount, date, description, method, installments }) => ({
         kind,
         amount,
         currency,
         categoryKey,
+        accountKey: accountKey ?? null,
+        toAccountKey: toAccountKey ?? null,
+        toAmount: toAmount ?? null,
         date,
         description,
         method,
@@ -122,7 +129,7 @@ export function SettingsScreen() {
 
       <section className="card">
         <h2>Borrar todo</h2>
-        <p className="hint">Borra todos tus movimientos y vuelve las categorías a las de fábrica. No se puede deshacer.</p>
+        <p className="hint">Borra todos tus movimientos y vuelve las categorías y cuentas a las de fábrica. No se puede deshacer.</p>
         <label className="field">
           <span>Escribí BORRAR para confirmar</span>
           <input value={confirmWipe} onChange={(e) => setConfirmWipe(e.target.value)} autoCapitalize="characters" />
@@ -144,6 +151,9 @@ export function SettingsScreen() {
       </section>
 
       <section className="card stack">
+        <Link to="/categorias" className="btn-quiet as-btn">
+          Categorías y presupuestos
+        </Link>
         {user?.role === 'admin' && (
           <Link to="/admin" className="btn-quiet as-btn">
             Administrar usuarios

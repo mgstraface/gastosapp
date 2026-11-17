@@ -36,14 +36,17 @@ const settingsDocSchema = new Schema(
 );
 export const SettingsDoc = mongoose.model('Settings', settingsDocSchema);
 
-/* Movimientos (gastos e ingresos): validados con movementInputSchema antes de guardar. Montos en centavos. */
+/* Movimientos (gastos, ingresos y transferencias entre cuentas): validados con movementInputSchema antes de guardar. Montos en centavos. */
 const movementSchema = new Schema(
   {
     userId: { type: Schema.Types.ObjectId, required: true },
-    kind: { type: String, enum: ['gasto', 'ingreso'], default: 'gasto' },
+    kind: { type: String, enum: ['gasto', 'ingreso', 'transferencia'], default: 'gasto' },
     amount: { type: Number, required: true },
     currency: { type: String, enum: ['ARS', 'USD'], default: 'ARS' },
-    categoryKey: { type: String, required: true },
+    categoryKey: { type: String, default: '' },
+    accountKey: { type: String, default: null },
+    toAccountKey: { type: String, default: null },
+    toAmount: { type: Number, default: null },
     date: { type: String, required: true },
     description: { type: String, default: '' },
     method: { type: String, default: 'debito' },
@@ -65,7 +68,10 @@ export function toMovement(m: any): Movement {
     kind: m.kind,
     amount: m.amount,
     currency: m.currency,
-    categoryKey: m.categoryKey,
+    categoryKey: m.categoryKey ?? '',
+    accountKey: m.accountKey ?? null,
+    toAccountKey: m.toAccountKey ?? null,
+    toAmount: m.toAmount ?? null,
     date: m.date,
     description: m.description ?? '',
     method: m.method,

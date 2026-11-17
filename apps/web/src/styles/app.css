@@ -792,3 +792,74 @@ input[type='date'] {
 .admin {
   padding-bottom: 40px;
 }
+
+/* ---------- cuentas ---------- */
+.hero-sub {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  opacity: 0.9;
+}
+.money-card {
+  text-decoration: none;
+  color: inherit;
+}
+.money-total {
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.money-total small {
+  font-weight: 700;
+  color: var(--ink-2);
+}
+.acc-strip {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  margin: 0 -16px;
+  padding: 0 16px 2px;
+  scrollbar-width: none;
+}
+.acc-strip::-webkit-scrollbar {
+  display: none;
+}
+.acc-pill {
+  flex: none;
+  display: grid;
+  gap: 0;
+  border: 1.5px solid var(--line);
+  border-left-width: 4px;
+  border-radius: 12px;
+  padding: 6px 12px;
+  font-size: var(--step--1);
+  color: var(--ink-2);
+}
+.acc-pill strong {
+  color: var(--ink);
+  font-size: var(--step-0);
+  font-variant-numeric: tabular-nums;
+}
+.mov-amount.neg {
+  color: var(--over);
+}
+.mov-amount.is-neutral {
+  color: var(--ink-2);
+}
+.row-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.amount-row.small {
+  padding: 4px 10px;
+}
+.amount-row.small input.amount-input {
+  font-size: 1.5rem;
+}
+.page-foot {
+  padding: 0 4px 8px;
+}
+.page-foot .link {
+  display: inline;
+  padding: 0;
+}

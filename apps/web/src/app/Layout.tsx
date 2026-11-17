@@ -7,7 +7,7 @@ import { RegisterContext, type MovementSheetTarget } from '../features/movements
 const tabs = [
   { to: '/', label: 'Mes', icon: IconMonth, end: true },
   { to: '/movimientos', label: 'Movimientos', icon: IconList },
-  { to: '/categorias', label: 'Categorías', icon: IconTag },
+  { to: '/cuentas', label: 'Cuentas', icon: IconWallet },
   { to: '/yo', label: 'Yo', icon: IconMe },
 ];
 
@@ -78,11 +78,12 @@ function IconList() {
     </svg>
   );
 }
-function IconTag() {
+function IconWallet() {
   return (
     <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round">
-      <path d="M3.5 12.2V4.5a1 1 0 0 1 1-1h7.7l8.3 8.3a1 1 0 0 1 0 1.4l-7.3 7.3a1 1 0 0 1-1.4 0z" />
-      <circle cx="8" cy="8" r="1.5" />
+      <path d="M4 7.5A2.5 2.5 0 0 1 6.5 5H18v3" />
+      <rect x="4" y="8" width="16" height="11" rx="2.5" />
+      <circle cx="15.5" cy="13.5" r="1.2" fill="currentColor" />
     </svg>
   );
 }

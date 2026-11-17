@@ -18,15 +18,35 @@ export const categorySchema = z.object({
 });
 export type Category = z.infer<typeof categorySchema>;
 
+export const accountSchema = z.object({
+  key: z.string().regex(/^[a-z0-9-]{1,40}$/),
+  name: z.string().trim().min(1, 'La cuenta necesita un nombre').max(30),
+  emoji: z.string().max(8).default('💵'),
+  color: z.string().regex(/^#[0-9a-fA-F]{6}$/).default('#3d8b7d'),
+  currency: currencySchema.default('ARS'),
+  /** Saldo antes del primer movimiento cargado (centavos, puede ser negativo). Se ajusta desde "Saldo hoy". */
+  initialBalance: z.number().int().min(-1e13).max(1e13).default(0),
+  archived: z.boolean().default(false),
+});
+export type Account = z.infer<typeof accountSchema>;
+
+export const DEFAULT_ACCOUNTS: Account[] = [{ key: 'efectivo', name: 'Efectivo', emoji: '💵', color: '#7a9e4b', currency: 'ARS', initialBalance: 0, archived: false }];
+
 export const settingsSchema = z
   .object({
     /** Moneda principal: la que se usa por defecto y para los presupuestos. */
     currency: currencySchema.default('ARS'),
     categories: z.array(categorySchema).min(1).max(80),
+    /** Dónde está la plata. Los ajustes guardados antes de que existieran arrancan con "Efectivo". */
+    accounts: z.array(accountSchema).max(40).default(() => DEFAULT_ACCOUNTS.map((a) => ({ ...a }))),
   })
   .refine((s) => new Set(s.categories.map((c) => c.key)).size === s.categories.length, {
     message: 'Hay dos categorías con el mismo identificador',
     path: ['categories'],
+  })
+  .refine((s) => new Set(s.accounts.map((a) => a.key)).size === s.accounts.length, {
+    message: 'Hay dos cuentas con el mismo identificador',
+    path: ['accounts'],
   });
 export type Settings = z.infer<typeof settingsSchema>;
 
@@ -48,14 +68,18 @@ export const DEFAULT_CATEGORIES: Category[] = [
   { key: 'extra', name: 'Extras', emoji: '✨', color: '#3d8b7d', kind: 'ingreso', budget: null, archived: false },
 ];
 
-export const defaultSettings = (): Settings => ({ currency: 'ARS', categories: DEFAULT_CATEGORIES.map((c) => ({ ...c })) });
+export const defaultSettings = (): Settings => ({
+  currency: 'ARS',
+  categories: DEFAULT_CATEGORIES.map((c) => ({ ...c })),
+  accounts: DEFAULT_ACCOUNTS.map((a) => ({ ...a })),
+});
 
-/** "Comida afuera" → "comida-afuera", sin chocar con las que ya existen. */
+/** "Comida afuera" → "comida-afuera", sin chocar con las que ya existen. Sirve también para cuentas. */
 export function categoryKey(name: string, taken: string[]): string {
   const base =
     name
       .normalize('NFD')
-      .replace(/[̀-ͯ]/g, '')
+      .replace(/[\u0300-\u036f]/g, '')
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-|-$/g, '')
