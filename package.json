@@ -1,0 +1,16 @@
+{
+  "name": "gastosapp",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w @gastosapp/api & npm run dev -w @gastosapp/web",
+    "dev:web": "npm run dev -w @gastosapp/web",
+    "dev:api": "npm run dev -w @gastosapp/api",
+    "build": "npm run build -w @gastosapp/api && npm run build -w @gastosapp/web",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  }
+}

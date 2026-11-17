@@ -1,0 +1,35 @@
+name: Deploy GastosApp al VPS
+
+# Cada push a main se despliega solo. También se puede correr a mano desde Actions → Run workflow.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: gastosapp-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    # Hasta que se carguen los secrets del VPS, el push no intenta desplegar.
+    env:
+      HAS_VPS: ${{ secrets.VPS_HOST != '' }}
+    steps:
+      - name: Sin secrets del VPS todavía
+        if: env.HAS_VPS != 'true'
+        run: echo "Faltan VPS_HOST, VPS_PORT, VPS_USER y VPS_SSH_KEY en los secrets del repo; no se despliega."
+      - name: Deploy por SSH
+        if: env.HAS_VPS == 'true'
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          port: ${{ secrets.VPS_PORT }}
+          username: ${{ secrets.VPS_USER }}
+          # Clave PROPIA de GastosApp, restringida con command= a scripts/deploy-vps.sh.
+          # No usar la del robot, la de Casa Roma ni la de Nutrimapache.
+          key: ${{ secrets.VPS_SSH_KEY }}
+          command_timeout: 20m
+          script: bash /root/gastosapp/app/scripts/deploy-vps.sh

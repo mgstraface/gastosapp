@@ -1,0 +1,86 @@
+/*
+  Dirección visual: "la billetera".
+  Verde petróleo profundo como base (calma, cuentas claras), amarillo ámbar de acento
+  y un menta suave para los ingresos. El rojo ladrillo solo aparece cuando algo se pasa del tope.
+*/
+:root {
+  --deep: #12403f;        /* verde petróleo */
+  --deep-2: #1d5c58;
+  --accent: #f2b134;      /* ámbar */
+  --accent-soft: #fcefd2;
+  --mint: #3d8b7d;        /* ingresos */
+  --mint-soft: #dcefe9;
+  --over: #c8553d;        /* pasado del tope */
+  --bg: #f4f6f3;
+  --paper: #ffffff;
+  --ink: #17201f;
+  --ink-2: #5b6664;
+  --line: #dfe5e2;
+  --muted: #b7c1be;
+
+  --font-display: 'Bricolage Grotesque', ui-rounded, system-ui, sans-serif;
+  --font-body: 'Atkinson Hyperlegible', system-ui, sans-serif;
+
+  --step--1: 0.8125rem;
+  --step-0: 1rem;
+  --step-1: 1.1875rem;
+  --step-2: 1.5rem;
+  --step-3: 2rem;
+  --step-4: 2.6rem;
+
+  --radius-s: 10px;
+  --radius-m: 18px;
+  --radius-l: 28px;
+
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --tabbar-h: 64px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: var(--step-0);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  line-height: 1.15;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

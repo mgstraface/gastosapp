@@ -1,0 +1,49 @@
+# GastosApp en el VPS compartido (convive con Casa Roma, el robot y Nutrimapache).
+#
+# Reglas para no pisar a los otros proyectos:
+#   - Nunca publica 80/443: el nginx del VPS es el único que atiende el dominio y hace HTTPS.
+#   - Solo publica puertos en 127.0.0.1, con números propios (WEB_PORT, MONGO_PORT).
+#   - Nombre de proyecto, contenedores y volúmenes con prefijo propio (STACK).
+#
+# Lo levanta scripts/deploy-vps.sh. A mano: docker compose up -d --build
+
+name: ${STACK:-gastosapp}
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    container_name: ${STACK:-gastosapp}-web
+    ports:
+      - "127.0.0.1:${WEB_PORT:-8093}:80"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: ${STACK:-gastosapp}-api
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      MONGO_URL: mongodb://mongo:27017/gastosapp
+    depends_on:
+      - mongo
+    restart: unless-stopped
+
+  mongo:
+    image: mongo:7
+    container_name: ${STACK:-gastosapp}-mongo
+    # Solo desde el propio VPS. Desde tu PC: ssh -N -L 27023:127.0.0.1:27023 root@<vps>
+    ports:
+      - "127.0.0.1:${MONGO_PORT:-27023}:27017"
+    volumes:
+      - mongo_data:/data/db
+    restart: unless-stopped
+
+volumes:
+  mongo_data:
