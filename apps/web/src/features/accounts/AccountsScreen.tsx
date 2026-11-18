@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { CURRENCIES, PALETTE, accountBalances, amountToInput, categoryKey, convert, formatMoney, localDate, parseAmount, type Account, type AccountBalance, type Currency } from '@gastosapp/shared';
+import { CURRENCIES, PALETTE, accountBalances, addMonths, amountToInput, categoryKey, convert, formatMoney, localDate, monthLabel, monthOf, parseAmount, type Account, type AccountBalance, type Currency } from '@gastosapp/shared';
 import { Sheet } from '../../components/Sheet';
 import { errorText } from '../../lib/api';
 import { useRate, useSettings, useStore } from '../../lib/store';
@@ -9,6 +9,10 @@ import { useRegister } from '../movements/registerContext';
 const EMOJIS = ['💵', '🏦', '💳', '🟦', '🟧', '📱', '🐷', '💰', '🪙', '📈', '🏠', '✈️', '🎯', '🧾'];
 
 type Edit = { mode: 'new' } | { mode: 'edit'; row: AccountBalance };
+
+const shortMonth = (m: string) => monthLabel(m).split(' ')[0]!;
+/** Próximos meses para cargar cuotas de compras anteriores en una tarjeta */
+const UPCOMING_MONTHS = 8;
 
 export function AccountsScreen() {
   const settings = useSettings();
@@ -22,6 +26,7 @@ export function AccountsScreen() {
   const active = b.accounts.filter((r) => !r.account.archived && r.account.type === 'normal');
   const cards = b.accounts.filter((r) => !r.account.archived && r.account.type === 'tarjeta');
   const usdInArs = convert(b.totals.USD, 'USD', 'ARS', rate);
+  const thisMonth = monthOf(localDate());
   const archived = b.accounts.filter((r) => r.account.archived);
   const hasUsd = active.some((r) => r.account.currency === 'USD');
 
@@ -89,13 +94,13 @@ export function AccountsScreen() {
                     <span className="mov-text">
                       <strong>{r.account.name}</strong>
                       <small>
-                        Próximo mes: {formatMoney(r.dueNextMonth, r.account.currency)}
-                        {r.pendingInstallments > 0 ? ` · cuotas por venir ${formatMoney(r.pendingInstallments, r.account.currency)}` : ''}
+                        Después, en {shortMonth(addMonths(thisMonth, 2))}: {formatMoney(r.dueNextMonth, r.account.currency)}
+                        {r.pendingInstallments > r.dueNextMonth ? ` · en total por venir ${formatMoney(r.pendingInstallments, r.account.currency)}` : ''}
                       </small>
                     </span>
                     <span className={`mov-amount${debt > 0 ? ' neg' : ''}`}>
                       {debt > 0 ? formatMoney(debt, r.account.currency) : debt < 0 ? `a favor ${formatMoney(-debt, r.account.currency)}` : 'Al día'}
-                      {debt > 0 && <small>a pagar</small>}
+                      {debt > 0 && <small>vence en {shortMonth(addMonths(thisMonth, 1))}</small>}
                     </span>
                   </button>
                   {debt > 0 && (
@@ -122,7 +127,9 @@ export function AccountsScreen() {
               );
             })}
           </ul>
-          <p className="hint">Lo que comprás con la tarjeta suma a "a pagar" cuota por cuota, a medida que llega cada mes. Al pagar el resumen, cargalo como transferencia a la tarjeta.</p>
+          <p className="hint">
+            Lo que comprás con la tarjeta suma al resumen cuota por cuota. Las cuotas de compras de antes las cargás tocando la tarjeta. Al pagar el resumen, usá "Pagar".
+          </p>
         </section>
       )}
 
@@ -189,6 +196,8 @@ function AccountSheet({ edit, onClose }: { edit: Edit | null; onClose: () => voi
   const [negative, setNegative] = useState(false);
   const [type, setType] = useState<'normal' | 'tarjeta'>('normal');
   const [savings, setSavings] = useState(false);
+  /** Cuotas anteriores por mes (texto de cada input), clave = mes en que entran al resumen */
+  const [upcoming, setUpcoming] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastEdit, setLastEdit] = useState<Edit | null>(null);
@@ -205,6 +214,7 @@ function AccountSheet({ edit, onClose }: { edit: Edit | null; onClose: () => voi
       setCurrency(a.currency);
       setType(a.type);
       setSavings(a.savings);
+      setUpcoming(Object.fromEntries((a.upcoming ?? []).map((u) => [u.month, amountToInput(u.amount)])));
       // En una tarjeta se pregunta lo que debés (positivo)
       const shown = a.type === 'tarjeta' ? -edit.row.balance : edit.row.balance;
       setBalanceText(shown ? amountToInput(Math.abs(shown)) : '0');
@@ -218,8 +228,24 @@ function AccountSheet({ edit, onClose }: { edit: Edit | null; onClose: () => voi
       setNegative(false);
       setType('normal');
       setSavings(false);
+      setUpcoming({});
     }
   }
+
+  const thisMonth = monthOf(localDate());
+  const futureMonths = Array.from({ length: UPCOMING_MONTHS }, (_, i) => addMonths(thisMonth, i + 1));
+  const upcomingInvalid = type === 'tarjeta' && futureMonths.some((m) => (upcoming[m] ?? '').trim() !== '' && parseAmount(upcoming[m]!) === null);
+  /** Las de meses que ya llegaron quedan como estaban (ya están en "a pagar"); las futuras salen de los inputs */
+  const buildUpcoming = (prev: Account['upcoming']) =>
+    type !== 'tarjeta'
+      ? []
+      : [
+          ...(prev ?? []).filter((u) => u.month <= thisMonth),
+          ...futureMonths.flatMap((m) => {
+            const v = parseAmount(upcoming[m] ?? '');
+            return v ? [{ month: m, amount: v }] : [];
+          }),
+        ];
 
   const row = edit?.mode === 'edit' ? edit.row : null;
   const used = !!row && movements.some((m) => m.accountKey === row.account.key || m.toAccountKey === row.account.key);
@@ -243,20 +269,30 @@ function AccountSheet({ edit, onClose }: { edit: Edit | null; onClose: () => voi
   };
 
   const save = () => {
-    if (!edit || !name.trim() || balanceInvalid) return;
+    if (!edit || !name.trim() || balanceInvalid || upcomingInvalid) return;
     if (row) {
       // "Saldo hoy" ajusta el saldo inicial para que la cuenta dé exactamente lo que tenés.
       const fromMovements = row.balance - row.account.initialBalance;
       void persist(
         settings.accounts.map((a) =>
           a.key === row.account.key
-            ? { ...a, name: name.trim(), emoji, color, currency: used ? a.currency : currency, initialBalance: desired - fromMovements, type, savings: type === 'normal' && savings }
+            ? {
+                ...a,
+                name: name.trim(),
+                emoji,
+                color,
+                currency: used ? a.currency : currency,
+                initialBalance: desired - fromMovements,
+                type,
+                savings: type === 'normal' && savings,
+                upcoming: buildUpcoming(a.upcoming),
+              }
             : a,
         ),
       );
     } else {
       const key = categoryKey(name, settings.accounts.map((a) => a.key));
-      void persist([...settings.accounts, { key, name: name.trim(), emoji, color, currency, initialBalance: desired, type, savings: type === 'normal' && savings, archived: false }]);
+      void persist([...settings.accounts, { key, name: name.trim(), emoji, color, currency, initialBalance: desired, type, savings: type === 'normal' && savings, upcoming: buildUpcoming([]), archived: false }]);
     }
   };
 
@@ -284,7 +320,7 @@ function AccountSheet({ edit, onClose }: { edit: Edit | null; onClose: () => voi
               {row.account.archived ? 'Reactivar' : used ? 'Archivar' : 'Borrar'}
             </button>
           )}
-          <button type="button" className="btn-primary" onClick={save} disabled={busy || !name.trim() || balanceInvalid}>
+          <button type="button" className="btn-primary" onClick={save} disabled={busy || !name.trim() || balanceInvalid || upcomingInvalid}>
             {busy ? 'Guardando…' : 'Guardar'}
           </button>
         </>
@@ -328,7 +364,7 @@ function AccountSheet({ edit, onClose }: { edit: Edit | null; onClose: () => voi
       <label className="field">
         <span>
           {type === 'tarjeta'
-            ? '¿Cuánto debés hoy en la tarjeta? (lo del resumen que no pagaste)'
+            ? `¿Cuánto tenés que pagar en ${shortMonth(addMonths(thisMonth, 1))}? (el resumen que viene)`
             : row
               ? '¿Cuánto tenés hoy en esta cuenta?'
               : '¿Cuánto tenés hoy? (podés dejarlo en 0)'}
@@ -351,6 +387,27 @@ function AccountSheet({ edit, onClose }: { edit: Edit | null; onClose: () => voi
           )
         )}
       </label>
+
+      {type === 'tarjeta' && (
+        <fieldset className="field">
+          <legend>Cuotas de compras anteriores: ¿cuánto vence en los meses siguientes?</legend>
+          <div className="upcoming-grid">
+            {futureMonths.map((m) => (
+              <label key={m}>
+                <span>{monthLabel(addMonths(m, 1))}</span>
+                <input
+                  inputMode="decimal"
+                  value={upcoming[m] ?? ''}
+                  onChange={(e) => setUpcoming((u) => ({ ...u, [m]: e.target.value.replace(/[^\d.,]/g, '') }))}
+                  placeholder="0"
+                />
+              </label>
+            ))}
+          </div>
+          <small className="hint">Solo lo de compras que hiciste antes de cargarlas acá. Lo que compres de ahora en más se suma solo.</small>
+          {upcomingInvalid && <small className="form-error">Hay un monto que no entendemos.</small>}
+        </fieldset>
+      )}
 
       <fieldset className="field">
         <legend>Ícono</legend>

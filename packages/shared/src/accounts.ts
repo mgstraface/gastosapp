@@ -77,6 +77,16 @@ export function accountBalances(movements: Movement[], settings: Settings, today
     }
   }
 
+  // Tarjetas: cuotas de compras anteriores cargadas a mano
+  const thisMonth = monthOf(today);
+  for (const a of settings.accounts) {
+    for (const u of a.upcoming ?? []) {
+      if (u.month <= thisMonth) sums.set(a.key, (sums.get(a.key) ?? 0) - u.amount);
+      else pending.set(a.key, (pending.get(a.key) ?? 0) + u.amount);
+      if (u.month === nextMonth) nextDue.set(a.key, (nextDue.get(a.key) ?? 0) + u.amount);
+    }
+  }
+
   const totals: Record<Currency, number> = { ARS: 0, USD: 0 };
   const accounts = settings.accounts.map((account) => {
     const balance = account.initialBalance + (sums.get(account.key) ?? 0);

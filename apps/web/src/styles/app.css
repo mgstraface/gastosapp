@@ -1000,3 +1000,16 @@ input[type='date'] {
     transform: translate(-50%, 10px);
   }
 }
+
+.upcoming-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.upcoming-grid label {
+  display: grid;
+  gap: 2px;
+  font-size: 0.75rem;
+  color: var(--ink-2);
+  text-transform: capitalize;
+}

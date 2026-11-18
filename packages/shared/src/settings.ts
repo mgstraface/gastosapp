@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { monthSchema } from './dates';
 import { currencySchema } from './money';
 
 export const kindSchema = z.enum(['gasto', 'ingreso']);
@@ -28,6 +29,14 @@ export const accountSchema = z.object({
   initialBalance: z.number().int().min(-1e13).max(1e13).default(0),
   /** normal: plata que tenés. tarjeta: tarjeta de crédito, el saldo es lo que debés. */
   type: z.enum(['normal', 'tarjeta']).default('normal'),
+  /**
+   * Tarjetas: cuotas de compras de antes de usar la app, por mes en que entran al resumen
+   * (se pagan el mes siguiente). Cuando llega ese mes, pasan a "a pagar".
+   */
+  upcoming: z
+    .array(z.object({ month: monthSchema, amount: z.number().int().positive().max(1e13) }))
+    .max(60)
+    .default([]),
   /** Cuenta de ahorro: lo que pasás acá cuenta en "Ahorraste este mes". */
   savings: z.boolean().default(false),
   archived: z.boolean().default(false),
@@ -35,7 +44,7 @@ export const accountSchema = z.object({
 export type Account = z.infer<typeof accountSchema>;
 
 export const DEFAULT_ACCOUNTS: Account[] = [
-  { key: 'efectivo', name: 'Efectivo', emoji: '💵', color: '#7a9e4b', currency: 'ARS', initialBalance: 0, type: 'normal', savings: false, archived: false },
+  { key: 'efectivo', name: 'Efectivo', emoji: '💵', color: '#7a9e4b', currency: 'ARS', initialBalance: 0, type: 'normal', upcoming: [], savings: false, archived: false },
 ];
 
 /** Gastos e ingresos que se repiten todos los meses (alquiler, servicios, suscripciones, sueldo). */
