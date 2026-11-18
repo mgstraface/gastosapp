@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import {
   METHOD_LABELS,
+  accountBalances,
   addMonths,
   amountToInput,
   formatMoney,
@@ -34,6 +35,7 @@ export function MovementSheet({ target, onClose }: { target: MovementSheetTarget
   const movements = useStore((s) => s.movements);
   const ai = useStore((s) => s.ai);
   const setAi = useStore((s) => s.setAi);
+  const saveSettings = useStore((s) => s.saveSettings);
   const showToast = useStore((s) => s.showToast);
 
   const editing = target?.mode === 'edit' ? target.movement : null;
@@ -57,6 +59,8 @@ export function MovementSheet({ target, onClose }: { target: MovementSheetTarget
   // Transferencia con una persona (saldar)
   const [personKey, setPersonKey] = useState<string | null>(null);
   const [personDir, setPersonDir] = useState<'pago' | 'cobro'>('pago');
+  // Pago de tarjeta: dejarla al día
+  const [settleCard, setSettleCard] = useState(false);
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -86,6 +90,7 @@ export function MovementSheet({ target, onClose }: { target: MovementSheetTarget
       setPaidBy(p.split.paidBy);
       setMyPartText(amountToInput(p.split.myPart));
     }
+    if (p.settleCard) setSettleCard(true);
     if (p.personKey !== undefined) {
       setPersonKey(p.personKey);
       setPersonDir(p.toAccountKey ? 'cobro' : 'pago');
@@ -106,6 +111,7 @@ export function MovementSheet({ target, onClose }: { target: MovementSheetTarget
     setPersonKey(null);
     setPersonDir('pago');
     setRecurringKey(null);
+    setSettleCard(false);
     if (target.mode === 'edit') {
       const m = target.movement;
       setAmountText(amountToInput(m.amount));
@@ -155,6 +161,14 @@ export function MovementSheet({ target, onClose }: { target: MovementSheetTarget
   const cuotas = showInstallments ? installments : 1;
   const myPart = splitOn ? parseAmount(myPartText) ?? (myPartText.trim() === '0' ? 0 : null) : null;
 
+  // Cuánto se debe hoy en la tarjeta destino (para el pago del resumen)
+  const cardDebt = useMemo(() => {
+    if (editing || kind !== 'transferencia' || to?.type !== 'tarjeta') return null;
+    const row = accountBalances(movements, settings, localDate()).accounts.find((r) => r.account.key === to.key);
+    return row ? -row.balance : null;
+  }, [editing, kind, to, movements, settings]);
+  const cardLeft = cardDebt !== null && amount ? cardDebt - amount : null;
+
   const valid =
     !!amount &&
     !!date &&
@@ -194,6 +208,11 @@ export function MovementSheet({ target, onClose }: { target: MovementSheetTarget
       const before = kind === 'gasto' ? monthSummary(st.movements, month, settings, { rate }).byCategory.find((r) => r.category.key === categoryKey) : undefined;
       if (editing) await updateMovement(editing.id, input);
       else await addMovement(input);
+      // Pagó el resumen: la diferencia (redondeos, centavos) se ajusta para que la tarjeta quede en cero
+      if (!editing && settleCard && to?.type === 'tarjeta' && cardLeft && date <= localDate()) {
+        const cur = useStore.getState().settings!;
+        await saveSettings({ ...cur, accounts: cur.accounts.map((a) => (a.key === to.key ? { ...a, initialBalance: a.initialBalance + cardLeft } : a)) });
+      }
       if (kind === 'gasto' && settings.budgetAlerts) {
         const after = monthSummary(useStore.getState().movements, month, settings, { rate }).byCategory.find((r) => r.category.key === categoryKey);
         const b = before?.ratio ?? 0;
@@ -339,7 +358,26 @@ export function MovementSheet({ target, onClose }: { target: MovementSheetTarget
       {kind === 'transferencia' && !isPersonTransfer && (
         <>
           <AccountPicker label="Entra en" accounts={accounts.filter((a) => a.key !== accountKey)} value={toAccountKey} onChange={setToAccountKey} />
-          {to?.type === 'tarjeta' && <p className="hint">Así se registra el pago de la tarjeta: baja lo que debés.</p>}
+          {to?.type === 'tarjeta' && (
+            <>
+              <p className="hint">
+                Así se registra el pago de la tarjeta: poné lo que pagaste exacto.
+                {cardDebt !== null && cardDebt > 0 ? ` Hoy debés ${formatMoney(cardDebt, to.currency)}.` : ''}
+              </p>
+              {cardDebt !== null && cardDebt > 0 && (
+                <label className="toggle-row">
+                  <input type="checkbox" checked={settleCard} onChange={(e) => setSettleCard(e.target.checked)} />
+                  <span>
+                    Con esto queda pagado el resumen
+                    {settleCard && cardLeft ? ` (se ajusta la diferencia de ${formatMoney(Math.abs(cardLeft), to.currency)})` : ''}
+                  </span>
+                </label>
+              )}
+              {cardDebt !== null && cardLeft !== null && cardLeft > 0 && !settleCard && (
+                <p className="hint">Te quedarían {formatMoney(cardLeft, to.currency)} de deuda en la tarjeta.</p>
+              )}
+            </>
+          )}
           {crossCurrency && to && (
             <label className="field">
               <span>

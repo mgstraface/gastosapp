@@ -116,6 +116,7 @@ export function AccountsScreen() {
                             toAccountKey: r.account.key,
                             accountKey: active.find((a) => a.account.currency === r.account.currency)?.account.key ?? null,
                             description: `Pago ${r.account.name}`,
+                            settleCard: true,
                           },
                         })
                       }

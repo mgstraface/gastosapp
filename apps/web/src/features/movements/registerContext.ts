@@ -15,6 +15,8 @@ export interface MovementPrefill {
   recurringKey?: string | null;
   split?: Split | null;
   personKey?: string | null;
+  /** Pago de tarjeta: dejarla al día aunque el monto difiera un poco (redondeos) */
+  settleCard?: boolean;
 }
 
 export type MovementSheetTarget = { mode: 'new'; date?: string; kind?: MovementKind; accountKey?: string; prefill?: MovementPrefill } | { mode: 'edit'; movement: Movement };
