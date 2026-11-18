@@ -38,8 +38,10 @@ export interface AccountBalance {
 
 export interface Balances {
   accounts: AccountBalance[];
-  /** Total por moneda de las cuentas activas (las tarjetas restan lo que se debe) */
+  /** Plata que tenés: total por moneda de las cuentas activas (sin las tarjetas) */
   totals: Record<Currency, number>;
+  /** Lo que se debe en tarjetas (positivo), por moneda. No se resta de totals hasta que se paga. */
+  cardDebt: Record<Currency, number>;
   /** Lo que mueven los movimientos sin cuenta asignada (los cargados antes de que existieran las cuentas) */
   unassigned: Record<Currency, number>;
   unassignedCount: number;
@@ -88,12 +90,16 @@ export function accountBalances(movements: Movement[], settings: Settings, today
   }
 
   const totals: Record<Currency, number> = { ARS: 0, USD: 0 };
+  const cardDebt: Record<Currency, number> = { ARS: 0, USD: 0 };
   const accounts = settings.accounts.map((account) => {
     const balance = account.initialBalance + (sums.get(account.key) ?? 0);
-    if (!account.archived) totals[account.currency] += balance;
+    if (!account.archived) {
+      if (account.type === 'tarjeta') cardDebt[account.currency] += Math.max(0, -balance);
+      else totals[account.currency] += balance;
+    }
     return { account, balance, pendingInstallments: pending.get(account.key) ?? 0, dueNextMonth: nextDue.get(account.key) ?? 0 };
   });
-  return { accounts, totals, unassigned, unassignedCount };
+  return { accounts, totals, cardDebt, unassigned, unassignedCount };
 }
 
 export function accountOf(settings: Settings, key: string | null): Account | null {

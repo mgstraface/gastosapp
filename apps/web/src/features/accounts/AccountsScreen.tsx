@@ -38,7 +38,7 @@ export function AccountsScreen() {
       </header>
 
       <section className="hero">
-        <p className="hero-label">Total</p>
+        <p className="hero-label">Tenés en tus cuentas</p>
         <p className="hero-amount">{formatMoney(b.totals.ARS, 'ARS')}</p>
         {hasUsd && <p className="hero-sub">+ {formatMoney(b.totals.USD, 'USD')}</p>}
         {hasUsd && usdInArs !== null && rate && (
@@ -46,7 +46,14 @@ export function AccountsScreen() {
             Todo en pesos: {formatMoney(b.totals.ARS + usdInArs, 'ARS')} · dólar a {formatMoney(Math.round(rate * 100), 'ARS')}
           </p>
         )}
-        {cards.some((r) => r.balance < 0) && <p className="hero-label">Ya descuenta lo que debés en tarjetas.</p>}
+        {(b.cardDebt.ARS > 0 || b.cardDebt.USD > 0) && (
+          <p className="hero-other">
+            En tarjetas debés {b.cardDebt.ARS > 0 ? formatMoney(b.cardDebt.ARS, 'ARS') : ''}
+            {b.cardDebt.ARS > 0 && b.cardDebt.USD > 0 ? ' + ' : ''}
+            {b.cardDebt.USD > 0 ? formatMoney(b.cardDebt.USD, 'USD') : ''}. Después de pagarlas te quedarían {formatMoney(b.totals.ARS - b.cardDebt.ARS, 'ARS')}
+            {hasUsd || b.cardDebt.USD > 0 ? ` + ${formatMoney(b.totals.USD - b.cardDebt.USD, 'USD')}` : ''}.
+          </p>
+        )}
       </section>
 
       <section className="card">

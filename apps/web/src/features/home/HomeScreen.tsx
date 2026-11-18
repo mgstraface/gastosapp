@@ -47,7 +47,7 @@ export function HomeScreen() {
   const trendMax = Math.max(1, ...trend.map((x) => Math.max(x.gastos, x.ingresos)));
   const recent = summary.lines.slice(0, 6);
   const balances = useMemo(() => accountBalances(movements, settings, today), [movements, settings, today]);
-  const accounts = balances.accounts.filter((r) => !r.account.archived);
+  const accounts = balances.accounts.filter((r) => !r.account.archived && r.account.type === 'normal');
   const hasUsd = accounts.some((r) => r.account.currency === otherCur);
   const otherInMain = convert(balances.totals[otherCur], otherCur, cur, rate);
   const totalMoney = balances.totals[cur] + (otherInMain ?? 0);
@@ -201,6 +201,11 @@ export function HomeScreen() {
         {hasUsd && otherInMain !== null && rate && (
           <small className="hint">
             Todo en pesos: {formatMoney(totalMoney, cur)} (dólar a {formatMoney(Math.round(rate * 100), 'ARS')})
+          </small>
+        )}
+        {balances.cardDebt[cur] > 0 && (
+          <small className="hint">
+            En tarjetas debés {formatMoney(balances.cardDebt[cur], cur)}: después de pagarlas te quedarían {formatMoney(balances.totals[cur] - balances.cardDebt[cur], cur)}.
           </small>
         )}
         {balances.unassignedCount > 0 && <small className="hint">Hay {balances.unassignedCount} movimientos sin cuenta: tocá para ordenarlos.</small>}
