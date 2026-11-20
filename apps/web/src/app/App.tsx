@@ -9,6 +9,7 @@ import { CategoriesScreen } from '../features/categories/CategoriesScreen';
 import { AccountsScreen } from '../features/accounts/AccountsScreen';
 import { RecurringScreen } from '../features/recurring/RecurringScreen';
 import { SharedScreen } from '../features/shared/SharedScreen';
+import { TrucoScreen } from '../features/truco/TrucoScreen';
 import { SettingsScreen } from '../features/settings/SettingsScreen';
 import { AdminScreen } from '../features/admin/AdminScreen';
 
@@ -56,6 +57,7 @@ export function App() {
           <Route path="categorias" element={<CategoriesScreen />} />
           <Route path="fijos" element={<RecurringScreen />} />
           <Route path="compartidos" element={<SharedScreen />} />
+          <Route path="truco" element={<TrucoScreen />} />
           <Route path="yo" element={<SettingsScreen />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>

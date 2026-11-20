@@ -19,7 +19,8 @@
   height: calc(var(--tabbar-h) + var(--safe-bottom));
   padding: 6px 8px var(--safe-bottom);
   display: grid;
-  grid-template-columns: 1fr 1fr auto 1fr 1fr;
+  /* 2 pestañas a la izquierda y 3 a la derecha: los anchos (3fr por lado) dejan el + centrado */
+  grid-template-columns: 1.5fr 1.5fr auto 1fr 1fr 1fr;
   align-items: center;
   background: rgba(255, 255, 255, 0.92);
   backdrop-filter: blur(14px);
@@ -44,7 +45,7 @@
 .tabbar-add {
   width: 60px;
   height: 60px;
-  margin: -26px 10px 0;
+  margin: -26px 6px 0;
   border-radius: 50%;
   border: 4px solid var(--bg);
   background: var(--accent);
@@ -1012,4 +1013,151 @@ input[type='date'] {
   font-size: 0.75rem;
   color: var(--ink-2);
   text-transform: capitalize;
+}
+
+/* ---------- truco ---------- */
+.truco-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.truco-target {
+  width: 150px;
+}
+.truco-board {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.truco-team {
+  background: var(--paper);
+  border-radius: var(--radius-m);
+  padding: 12px 10px;
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  box-shadow: 0 1px 2px rgba(18, 64, 63, 0.06);
+  border: 2px solid transparent;
+}
+.truco-team.is-winner {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+input.truco-name {
+  border: 0;
+  background: none;
+  text-align: center;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: var(--step-1);
+  padding: 4px;
+}
+input.truco-name:focus {
+  background: var(--bg);
+}
+.truco-score {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 2.6rem;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  display: grid;
+  justify-items: center;
+}
+.truco-score small {
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--ink-2);
+}
+.truco-tap {
+  width: 100%;
+  min-height: 300px;
+  border: 1.5px dashed var(--line);
+  background: var(--bg);
+  border-radius: 14px;
+  padding: 10px 6px;
+  display: grid;
+  place-items: center;
+  touch-action: manipulation;
+}
+.truco-tap:active:not(:disabled) {
+  background: var(--accent-soft);
+}
+.palitos {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+}
+.palitos-half {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+}
+.palitos-group {
+  width: 58px;
+  height: 58px;
+}
+.palitos-group line {
+  stroke-width: 5;
+  stroke-linecap: round;
+}
+.palitos-group line.on {
+  stroke: var(--deep);
+}
+.palitos-group line.off {
+  stroke: var(--line);
+  stroke-width: 2;
+  stroke-dasharray: 2 5;
+}
+.palitos-split {
+  width: 100%;
+  border-top: 2px solid var(--accent);
+  margin-top: 6px;
+  padding-top: 2px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: var(--ink-2);
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.truco-quick {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  width: 100%;
+}
+.truco-quick button {
+  min-height: 42px;
+  border: 1.5px solid var(--line);
+  background: var(--paper);
+  border-radius: 10px;
+  font-weight: 700;
+}
+.truco-quick button:disabled {
+  opacity: 0.35;
+}
+.truco-wins {
+  margin: 0;
+  font-size: var(--step--1);
+  color: var(--ink-2);
+  font-weight: 700;
+}
+.truco-win {
+  background: var(--accent-soft);
+  border-radius: var(--radius-m);
+  padding: 14px;
+  display: grid;
+  gap: 10px;
+  text-align: center;
+}
+.truco-win p {
+  margin: 0;
+  font-size: var(--step-1);
+}
+.truco-reset-wins {
+  justify-self: center;
+  font-size: var(--step--1);
 }

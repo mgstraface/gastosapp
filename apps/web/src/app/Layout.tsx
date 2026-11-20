@@ -9,6 +9,7 @@ const tabs = [
   { to: '/', label: 'Mes', icon: IconMonth, end: true },
   { to: '/movimientos', label: 'Movimientos', icon: IconList },
   { to: '/cuentas', label: 'Cuentas', icon: IconWallet },
+  { to: '/truco', label: 'Truco', icon: IconCards },
   { to: '/yo', label: 'Yo', icon: IconMe },
 ];
 
@@ -91,6 +92,15 @@ function IconWallet() {
       <path d="M4 7.5A2.5 2.5 0 0 1 6.5 5H18v3" />
       <rect x="4" y="8" width="16" height="11" rx="2.5" />
       <circle cx="15.5" cy="13.5" r="1.2" fill="currentColor" />
+    </svg>
+  );
+}
+function IconCards() {
+  return (
+    <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round">
+      <rect x="3.5" y="5" width="10" height="14.5" rx="1.8" transform="rotate(-10 8.5 12)" />
+      <rect x="10.5" y="4.5" width="10" height="14.5" rx="1.8" transform="rotate(8 15.5 12)" />
+      <path d="M15.6 9.6c-1 1.2-1.6 2-1.6 2.8a1.6 1.6 0 0 0 3.2 0c0-.8-.6-1.6-1.6-2.8z" fill="currentColor" stroke="none" />
     </svg>
   );
 }
